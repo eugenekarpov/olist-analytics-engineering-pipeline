@@ -15,3 +15,27 @@ models:
         tests:
           - not_null
           - unique
+  - name: int_order_payment_allocations
+    description: Allocates order-level payment value to order item grain.
+    tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - order_id
+              - order_item_id
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+      - name: order_item_id
+        tests:
+          - not_null
+      - name: item_gross_amount
+        tests:
+          - non_negative
+      - name: order_gross_amount
+        tests:
+          - non_negative
+      - name: allocated_payment_value
+        tests:
+          - non_negative

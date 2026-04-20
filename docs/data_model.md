@@ -221,6 +221,11 @@ valid_to
 is_current
 ```
 
+For fact joins, `valid_from` and `valid_to` represent business-effective
+windows. dbt snapshot metadata columns are retained separately as
+`snapshot_valid_from` and `snapshot_valid_to`, because dbt snapshot timestamps
+represent processing time rather than the business event time used by facts.
+
 ## Fact To SCD2 Joins
 
 The fact table should join to SCD2 dimensions using the event timestamp.

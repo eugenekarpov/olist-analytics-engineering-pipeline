@@ -211,21 +211,23 @@ Notes:
 
 ## Phase 8: Core Star Schema
 
+Status: complete.
+
 Goal:
 
 Create the dimensional model.
 
 Deliverables:
 
-- `dim_date`
-- `dim_seller`
-- `dim_order_status`
-- `dim_customer_scd2`
-- `dim_product_scd2`
-- `fact_order_items`
-- Payment allocation intermediate model.
-- Incremental fact with 3-day lookback.
-- Core tests.
+- `dim_date`. Complete.
+- `dim_seller`. Complete.
+- `dim_order_status`. Complete.
+- `dim_customer_scd2`. Complete.
+- `dim_product_scd2`. Complete.
+- `fact_order_items`. Complete.
+- Payment allocation intermediate model. Complete.
+- Incremental fact with 3-day lookback. Complete.
+- Core tests. Complete.
 
 ## Phase 9: Marts
 

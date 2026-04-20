@@ -158,6 +158,8 @@ business:
 - Redshift ingests raw files with `COPY`.
 - dbt turns raw data into typed staging models, then into a star schema.
 - Customer and product dimensions demonstrate SCD2 history with dbt snapshots.
+- The core layer exposes a star schema with SCD2 dimensions and an incremental
+  item-grain fact table.
 - Order item facts are loaded incrementally with a late-arriving data lookback.
 - Data quality is enforced through dbt source, staging, core, and mart tests.
 - Airflow provides orchestration, retries, failure visibility, and backfills.
