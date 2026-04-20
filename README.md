@@ -62,6 +62,32 @@ scripts/
   utilities/            Local helper scripts.
 ```
 
+## Local Commands
+
+Generate source profiling docs:
+
+```powershell
+python scripts\utilities\profile_olist_zip.py
+```
+
+Generate Redshift bootstrap SQL from the source profile:
+
+```powershell
+python scripts\utilities\generate_redshift_raw_ddl.py
+```
+
+Prepare gzip CSV files locally without uploading to S3:
+
+```powershell
+python scripts\ingestion\ingest_olist_to_s3.py --batch-date 2018-09-01 --run-id local_test_2018_09_01
+```
+
+Prepare and upload to S3 after AWS credentials are configured:
+
+```powershell
+python scripts\ingestion\ingest_olist_to_s3.py --batch-date 2018-09-01 --run-id manual_2018_09_01 --s3-bucket <bucket> --s3-prefix olist --upload
+```
+
 ## Main Design Decisions
 
 - AWS S3 is the raw landing zone.

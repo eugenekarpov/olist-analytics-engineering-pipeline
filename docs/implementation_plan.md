@@ -43,21 +43,24 @@ Notes:
 
 ## Phase 2: Python Ingestion To S3
 
+Status: in progress.
+
 Goal:
 
 Upload validated source files from `olist.zip` to the S3 raw zone.
 
 Deliverables:
 
-- Python ingestion script using `pandas` and `boto3`.
-- Source file validation.
-- Deterministic S3 keys.
-- Gzip CSV output.
-- Metadata columns:
+- Python ingestion script.
+- Source file validation. Complete.
+- Deterministic S3 keys. Complete.
+- Gzip CSV output. Complete.
+- Metadata columns. Complete:
   - `_batch_id`
   - `_loaded_at`
   - `_source_file`
   - `_source_system`
+- Optional S3 upload with `boto3`. Implemented, not yet tested against AWS.
 - Optional batch filtering by event date.
 - Initial correction feed generation for SCD2 simulation.
 
@@ -73,17 +76,20 @@ s3_prefix
 
 ## Phase 3: AWS And Redshift Bootstrap
 
+Status: in progress.
+
 Goal:
 
 Prepare AWS resources and Redshift schemas.
 
 Deliverables:
 
-- S3 bucket setup notes.
-- IAM role/policy notes for Redshift COPY.
-- Redshift schema creation SQL.
-- Raw table DDL.
-- Audit table DDL.
+- S3 bucket setup notes. Complete.
+- IAM role/policy notes for Redshift COPY. Complete.
+- Redshift schema creation SQL. Complete.
+- Raw table DDL. Complete.
+- Audit table DDL. Complete.
+- Redshift COPY template. Complete.
 
 Output candidates:
 

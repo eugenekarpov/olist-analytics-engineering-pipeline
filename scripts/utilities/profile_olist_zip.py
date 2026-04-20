@@ -132,7 +132,7 @@ def redshift_type(column_name: str, inferred_type: str) -> str:
 
 def profile_csv(zip_file: ZipFile, file_name: str, entity_name: str) -> FileProfile:
     with zip_file.open(file_name) as raw_file:
-        text_file = (line.decode("utf-8") for line in raw_file)
+        text_file = (line.decode("utf-8-sig") for line in raw_file)
         reader = csv.DictReader(text_file)
 
         if reader.fieldnames is None:

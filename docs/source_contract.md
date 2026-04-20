@@ -168,7 +168,7 @@ Rows: `71`
 
 | Column | Inferred type | Redshift raw type | Nulls | Null % | Sample values |
 | --- | --- | --- | --- | --- | --- |
-| `﻿product_category_name` | varchar | varchar(256) | 0 | 0.00% | `beleza_saude`, `informatica_acessorios`, `automotivo` |
+| `product_category_name` | varchar | varchar(256) | 0 | 0.00% | `beleza_saude`, `informatica_acessorios`, `automotivo` |
 | `product_category_name_english` | varchar | varchar(256) | 0 | 0.00% | `health_beauty`, `computers_accessories`, `auto` |
 
 ## Raw Metadata Columns

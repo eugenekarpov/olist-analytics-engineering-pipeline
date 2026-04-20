@@ -761,7 +761,7 @@
     "row_count": 71,
     "columns": [
       {
-        "name": "\ufeffproduct_category_name",
+        "name": "product_category_name",
         "null_count": 0,
         "non_null_count": 71,
         "inferred_type": "varchar",
