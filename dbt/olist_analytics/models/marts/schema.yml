@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  - name: mart_daily_revenue
+    description: Daily revenue mart at order purchase date grain.
+    columns:
+      - name: order_purchase_date
+        tests:
+          - not_null
+          - unique
+      - name: gross_revenue
+        tests:
+          - not_null
+          - non_negative
+      - name: allocated_payment_revenue
+        tests:
+          - not_null
+          - non_negative
+      - name: product_revenue
+        tests:
+          - not_null
+          - non_negative
+      - name: freight_revenue
+        tests:
+          - not_null
+          - non_negative
+      - name: orders_count
+        tests:
+          - not_null
+          - non_negative
+      - name: customers_count
+        tests:
+          - not_null
+          - non_negative
+      - name: items_count
+        tests:
+          - not_null
+          - non_negative
+      - name: average_order_value
+        tests:
+          - non_negative
+      - name: average_paid_order_value
+        tests:
+          - non_negative
+      - name: late_deliveries_count
+        tests:
+          - not_null
+          - non_negative
+  - name: mart_monthly_arpu
+    description: Monthly ARPU mart at order purchase month grain.
+    columns:
+      - name: order_month
+        tests:
+          - not_null
+          - unique
+      - name: active_customers
+        tests:
+          - not_null
+          - non_negative
+      - name: total_revenue
+        tests:
+          - not_null
+          - non_negative
+      - name: arpu
+        tests:
+          - non_negative
+      - name: orders_count
+        tests:
+          - not_null
+          - non_negative
+      - name: orders_per_customer
+        tests:
+          - non_negative
+      - name: average_order_value
+        tests:
+          - non_negative
+      - name: repeat_customer_rate
+        tests:
+          - non_negative

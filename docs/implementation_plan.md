@@ -231,16 +231,18 @@ Deliverables:
 
 ## Phase 9: Marts
 
+Status: complete.
+
 Goal:
 
 Create business-facing aggregate tables.
 
 Deliverables:
 
-- `mart_daily_revenue`
-- `mart_monthly_arpu`
-- Mart tests.
-- Example analytical SQL queries.
+- `mart_daily_revenue`. Complete.
+- `mart_monthly_arpu`. Complete.
+- Mart tests. Complete.
+- Example analytical SQL queries. Complete.
 
 ## Phase 10: Documentation And Interview Polish
 

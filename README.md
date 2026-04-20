@@ -160,6 +160,7 @@ business:
 - Customer and product dimensions demonstrate SCD2 history with dbt snapshots.
 - The core layer exposes a star schema with SCD2 dimensions and an incremental
   item-grain fact table.
+- The mart layer includes daily revenue and monthly ARPU aggregates.
 - Order item facts are loaded incrementally with a late-arriving data lookback.
 - Data quality is enforced through dbt source, staging, core, and mart tests.
 - Airflow provides orchestration, retries, failure visibility, and backfills.
