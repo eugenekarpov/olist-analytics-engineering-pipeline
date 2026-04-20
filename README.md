@@ -49,6 +49,11 @@ dbt/
 docs/
   architecture.md       End-to-end architecture and operational design.
   data_model.md         Dimensional model, grains, SCD2 strategy, marts.
+  diagrams.md           Mermaid architecture and data model diagrams.
+  runbook.md            Local and AWS run instructions.
+  interview_notes.md    Talking points for technical interviews.
+  aws_next_steps.md     Checklist for the first AWS end-to-end run.
+  known_limitations.md  Current limitations and future improvements.
   implementation_plan.md Phased delivery roadmap.
   source_contract.md    Generated source schema contract and row counts.
   source_profile.json   Machine-readable generated source profile.
@@ -167,5 +172,15 @@ business:
 
 ## Current Status
 
-Planning docs, repository skeleton, and source profiling are in place.
-Implementation continues with the ingestion layer and AWS/Redshift setup.
+The local project implementation is ready for the first AWS-backed end-to-end
+run. Next steps are configuring AWS S3, Redshift, IAM, and executing the runbook.
+
+Useful docs:
+
+- [Architecture](docs/architecture.md)
+- [Data Model](docs/data_model.md)
+- [Diagrams](docs/diagrams.md)
+- [Runbook](docs/runbook.md)
+- [Interview Notes](docs/interview_notes.md)
+- [AWS Next Steps](docs/aws_next_steps.md)
+- [Known Limitations](docs/known_limitations.md)
