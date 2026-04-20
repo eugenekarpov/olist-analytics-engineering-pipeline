@@ -68,6 +68,12 @@ Airflow DAG skeleton:
 airflow/dags/olist_modern_data_stack.py
 ```
 
+dbt project:
+
+```text
+dbt/olist_analytics/
+```
+
 ## Local Commands
 
 Generate source profiling docs:
@@ -92,6 +98,13 @@ Prepare and upload to S3 after AWS credentials are configured:
 
 ```powershell
 python scripts\ingestion\ingest_olist_to_s3.py --batch-date 2018-09-01 --run-id manual_2018_09_01 --s3-bucket <bucket> --s3-prefix olist --upload
+```
+
+Parse the dbt project after installing requirements and configuring a profile:
+
+```powershell
+cd dbt\olist_analytics
+dbt parse
 ```
 
 ## Main Design Decisions

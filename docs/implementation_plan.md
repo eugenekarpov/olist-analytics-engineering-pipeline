@@ -127,17 +127,19 @@ Output candidates:
 
 ## Phase 5: dbt Project Bootstrap
 
+Status: complete.
+
 Goal:
 
 Create a dbt project targeting Redshift.
 
 Deliverables:
 
-- `dbt_project.yml`
-- `profiles.yml.example`
-- Source definitions.
-- Staging model structure.
-- Basic dbt tests.
+- `dbt_project.yml`. Complete.
+- `profiles.yml.example`. Complete.
+- Source definitions. Complete.
+- Staging model structure. Complete.
+- Basic dbt tests. Complete.
 
 dbt folders:
 
@@ -151,6 +153,14 @@ snapshots/
 tests/
 macros/
 ```
+
+Notes:
+
+- Staging models are implemented as views.
+- Custom schema naming maps dbt schemas directly to Redshift schemas such as
+  `staging`, `intermediate`, `core`, and `marts`.
+- Generic tests include `non_negative` and `unique_combination_of_columns` so the
+  project does not require `dbt_utils` in the first version.
 
 ## Phase 6: Staging Models
 
