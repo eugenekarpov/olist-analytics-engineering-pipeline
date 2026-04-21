@@ -165,6 +165,9 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     tags=["olist", "s3", "redshift", "dbt"],
+    # Runtime defaults for manual/demo runs. 2018-09-01 is after the
+    # generated correction feed effective dates, so the sample SCD2 flow
+    # has visible changes without requiring a backfill sequence.
     params={
         "batch_date": "2018-09-01",
         "lookback_days": 3,
