@@ -117,8 +117,9 @@ business-effective `valid_from` / `valid_to` window.
 lookback_days = 3
 ```
 
-Each incremental run reprocesses recent business dates so delayed records or
-corrections can be incorporated without rebuilding the full fact table.
+Each incremental run reprocesses recent business dates. It also widens the
+window to include visible SCD2 correction effective dates, so historical facts
+get the correct customer/product surrogate keys after dimension corrections.
 
 ## Data Quality Talking Points
 

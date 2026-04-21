@@ -261,6 +261,19 @@ allocated_payment_value =
 
 This demonstrates careful handling of different source grains.
 
+## Incremental Reprocessing Window
+
+`fact_order_items` is incremental, but the reprocessing window is intentionally
+slightly wider than a simple "last N days" filter. Each run reprocesses from the
+earliest of:
+
+- the configured late-arriving lookback boundary;
+- the earliest visible customer correction effective timestamp;
+- the earliest visible product correction effective timestamp.
+
+This keeps fact-to-SCD2 surrogate keys consistent when a dimension correction is
+business-effective in the past.
+
 ## Materializations
 
 Recommended first version:

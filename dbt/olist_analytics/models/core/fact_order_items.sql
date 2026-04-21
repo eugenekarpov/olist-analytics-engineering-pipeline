@@ -8,19 +8,55 @@
     )
 }}
 
-with orders as (
+-- The incremental branch references correction feeds to widen the reprocessing
+-- window when SCD2 changes are business-effective in the past.
+-- depends_on: {{ ref('stg_customer_profile_changes') }}
+-- depends_on: {{ ref('stg_product_attribute_changes') }}
+
+with
+
+{% if is_incremental() %}
+
+incremental_reprocess_boundaries as (
+    select
+        coalesce(
+            dateadd(
+                day,
+                -{{ var('lookback_days', 3) }},
+                max(order_purchase_timestamp)
+            ),
+            '1900-01-01'::timestamp
+        ) as reprocess_from
+    from {{ this }}
+
+    union all
+
+    select min(effective_at) as reprocess_from
+    from {{ ref('stg_customer_profile_changes') }}
+
+    union all
+
+    select min(effective_at) as reprocess_from
+    from {{ ref('stg_product_attribute_changes') }}
+),
+
+incremental_reprocess_window as (
+    select min(reprocess_from) as reprocess_from
+    from incremental_reprocess_boundaries
+    where reprocess_from is not null
+),
+
+{% endif %}
+
+orders as (
     select *
     from {{ ref('stg_orders') }}
 
     {% if is_incremental() %}
-        where order_purchase_timestamp >= coalesce((
-            select dateadd(
-                day,
-                -{{ var('lookback_days', 3) }},
-                max(order_purchase_timestamp)
-            )
-            from {{ this }}
-        ), '1900-01-01'::timestamp)
+        where order_purchase_timestamp >= (
+            select reprocess_from
+            from incremental_reprocess_window
+        )
     {% endif %}
 ),
 
