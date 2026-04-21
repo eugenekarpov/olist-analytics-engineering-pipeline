@@ -13,11 +13,12 @@ receive changes from operational systems, CDC, or master-data feeds.
 AWS infrastructure is documented but not yet provisioned as code. Terraform is a
 good future enhancement after the first manual end-to-end run is working.
 
-## Airflow Runtime Not Containerized Yet
+## Local Airflow Uses SQLite
 
-The DAG exists, but the project does not yet include a Docker Compose setup for
-local Airflow. For the first AWS run, the DAG can be validated conceptually and
-then wired into a local or managed Airflow environment.
+The project includes a Docker Compose Airflow runtime, but it intentionally uses
+SQLite and `SequentialExecutor` for local testing. This is fine for a pet
+project, but a production Airflow deployment should use a metadata database such
+as Postgres and a production executor.
 
 ## dbt Build Requires Real Redshift
 
@@ -30,6 +31,10 @@ tables.
 The first correction feed generates a small deterministic set of customer and
 product changes. This is enough to demonstrate the pattern. A future version
 could generate larger and more varied correction streams.
+
+dbt snapshots capture changes across runs. The core SCD2 dimensions also add a
+baseline business-effective row so a single final-date demo run still has valid
+pre-correction dimension keys.
 
 ## CSV Raw Format
 

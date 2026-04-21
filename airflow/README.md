@@ -24,6 +24,11 @@ backfills and scheduled daily runs.
 
 ## Required Environment Variables
 
+For Docker Compose, copy `.env.example` to `.env` and fill the AWS/Redshift
+values there. The Airflow container reads `.env` at startup from the mounted
+project folder, which keeps secret values out of `docker compose config`
+output.
+
 ```text
 OLIST_PROJECT_ROOT
 OLIST_S3_BUCKET
@@ -37,10 +42,19 @@ REDSHIFT_USER
 REDSHIFT_PASSWORD
 ```
 
+AWS credentials can be provided in `.env` with `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` for this local pet-project setup.
+
 `OLIST_PROJECT_ROOT` should point to the repository root. If it is not set, the
 DAG attempts to infer it from the local folder layout.
 
 ## Local Docker Compose
+
+Create local environment config:
+
+```powershell
+copy .env.example .env
+```
 
 Build the local Airflow image:
 

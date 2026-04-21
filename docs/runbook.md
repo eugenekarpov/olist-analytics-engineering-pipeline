@@ -27,6 +27,16 @@ Copy the dbt profile example:
 copy dbt\olist_analytics\profiles.yml.example dbt\olist_analytics\profiles.yml
 ```
 
+For Docker Compose and Airflow, copy the environment template and fill it with
+your local AWS/Redshift values:
+
+```powershell
+copy .env.example .env
+```
+
+Keep `.env` private. It is ignored by git and is loaded into the Airflow
+container at startup without exposing secret values through Compose config.
+
 For local dbt commands:
 
 ```powershell
@@ -67,6 +77,12 @@ infra/redshift/005_create_correction_tables.sql
 Airflow DAG performs the COPY commands programmatically.
 
 ## Manual Smoke Run Without Airflow
+
+Validate that the local archive still matches the committed source contract:
+
+```powershell
+python scripts\utilities\validate_source_contract.py
+```
 
 Prepare and upload raw Olist files:
 

@@ -81,28 +81,35 @@ models:
           - not_null
       - name: customer_key
         tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_customer_scd2')
                 field: customer_key
       - name: product_key
         tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_product_scd2')
                 field: product_key
       - name: seller_key
         tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_seller')
                 field: seller_key
       - name: order_status_key
         tests:
+          - not_null
           - relationships:
               arguments:
                 to: ref('dim_order_status')
                 field: order_status_key
+      - name: order_purchase_date_key
+        tests:
+          - not_null
       - name: price
         tests:
           - not_null

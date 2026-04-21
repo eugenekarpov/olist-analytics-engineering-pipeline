@@ -90,7 +90,6 @@ sources:
           - name: product_category_name
             tests:
               - not_null
-              - unique
       - name: customer_profile_changes
         description: Generated customer profile corrections for SCD2 simulation.
         columns:

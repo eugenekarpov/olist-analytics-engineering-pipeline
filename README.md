@@ -93,6 +93,12 @@ Generate source profiling docs:
 python scripts\utilities\profile_olist_zip.py
 ```
 
+Validate the local archive against the committed source contract:
+
+```powershell
+python scripts\utilities\validate_source_contract.py
+```
+
 Generate Redshift bootstrap SQL from the source profile:
 
 ```powershell
@@ -127,9 +133,13 @@ dbt parse
 Start local Airflow with SQLite:
 
 ```powershell
+copy .env.example .env
 docker compose build
 docker compose up -d
 ```
+
+Put local AWS/Redshift values in `.env`; it is ignored by git and loaded by
+the Airflow container at startup.
 
 ## Main Design Decisions
 

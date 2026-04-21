@@ -102,6 +102,10 @@ snapshot_valid_from
 snapshot_valid_to
 ```
 
+The dimensions include an initial baseline row from the source attributes, then
+use snapshot rows for changed states. This makes the demo robust even if the
+first warehouse run is executed at the final Olist batch date.
+
 The fact table joins to SCD2 dimensions using `order_purchase_timestamp` and the
 business-effective `valid_from` / `valid_to` window.
 

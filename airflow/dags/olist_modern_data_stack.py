@@ -88,6 +88,18 @@ region '{aws_region}';
                     f"batch_date={batch_date}/run_id={run_id}/"
                 )
                 cursor.execute(
+                    f"delete from raw.{entity_name} where _batch_id = %s;",
+                    (run_id,),
+                )
+                cursor.execute(
+                    """
+                    delete from audit.load_runs
+                    where load_run_id = %s
+                      and entity_name = %s;
+                    """,
+                    (run_id, entity_name),
+                )
+                cursor.execute(
                     copy_template.format(
                         entity_name=entity_name,
                         source_uri=source_uri,
@@ -165,10 +177,9 @@ with DAG(
         task_id="validate_source_contract",
         cwd=str(PROJECT_ROOT),
         bash_command=(
-            f"{PYTHON_BIN} scripts/utilities/profile_olist_zip.py "
+            f"{PYTHON_BIN} scripts/utilities/validate_source_contract.py "
             "--archive olist.zip "
-            "--markdown-output docs/source_contract.md "
-            "--json-output docs/source_profile.json"
+            "--profile docs/source_profile.json"
         ),
     )
 

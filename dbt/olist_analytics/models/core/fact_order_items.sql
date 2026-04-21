@@ -13,14 +13,14 @@ with orders as (
     from {{ ref('stg_orders') }}
 
     {% if is_incremental() %}
-        where order_purchase_timestamp >= (
+        where order_purchase_timestamp >= coalesce((
             select dateadd(
                 day,
                 -{{ var('lookback_days', 3) }},
                 max(order_purchase_timestamp)
             )
             from {{ this }}
-        )
+        ), '1900-01-01'::timestamp)
     {% endif %}
 ),
 

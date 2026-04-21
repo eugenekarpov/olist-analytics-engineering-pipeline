@@ -221,6 +221,11 @@ valid_to
 is_current
 ```
 
+The core dimensions also add a baseline row from the original source attributes
+with `valid_from = 1900-01-01`. This keeps historical facts joinable even when a
+demo run is started at a final `batch_date` where correction feeds are already
+visible.
+
 For fact joins, `valid_from` and `valid_to` represent business-effective
 windows. dbt snapshot metadata columns are retained separately as
 `snapshot_valid_from` and `snapshot_valid_to`, because dbt snapshot timestamps

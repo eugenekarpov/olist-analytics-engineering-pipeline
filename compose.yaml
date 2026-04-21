@@ -6,7 +6,11 @@ services:
     image: olist-airflow:local
     container_name: olist-airflow
     restart: unless-stopped
-    command: standalone
+    command:
+      - bash
+      - /opt/airflow/project/docker/airflow/load-env-and-run.sh
+      - airflow
+      - standalone
     ports:
       - "8080:8080"
     environment:
@@ -21,8 +25,6 @@ services:
       AWS_PROFILE: ${AWS_PROFILE:-default}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       OLIST_S3_BUCKET: ${OLIST_S3_BUCKET:-}
       OLIST_S3_PREFIX: ${OLIST_S3_PREFIX:-olist}
       REDSHIFT_COPY_IAM_ROLE_ARN: ${REDSHIFT_COPY_IAM_ROLE_ARN:-}
@@ -30,7 +32,6 @@ services:
       REDSHIFT_PORT: ${REDSHIFT_PORT:-5439}
       REDSHIFT_DATABASE: ${REDSHIFT_DATABASE:-}
       REDSHIFT_USER: ${REDSHIFT_USER:-}
-      REDSHIFT_PASSWORD: ${REDSHIFT_PASSWORD:-}
     volumes:
       - ./:/opt/airflow/project
       - ./airflow/dags:/opt/airflow/dags
