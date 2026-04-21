@@ -76,7 +76,8 @@ docker compose down
 Reset the local Airflow SQLite metadata DB:
 
 ```powershell
-docker compose down -v
+docker compose down
+Remove-Item airflow\airflow.db -Force
 ```
 
 SQLite/SequentialExecutor means Airflow runs tasks one at a time. That is fine

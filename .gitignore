@@ -20,6 +20,7 @@ profiles.yml
 airflow/logs/
 airflow/plugins/
 airflow/airflow.db
+airflow/*.db
 airflow/webserver_config.py
 
 # Environment and secrets
