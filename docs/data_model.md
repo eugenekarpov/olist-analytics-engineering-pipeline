@@ -348,8 +348,11 @@ Metrics:
 - Dimension surrogate keys are unique and not null.
 - Fact natural key is unique and not null.
 - Fact foreign keys have relationships to dimensions.
+- Fact rows match the cleaned staging order-item grain.
 - SCD2 windows do not overlap per business key.
+- SCD2 windows have positive effective intervals.
 - Current SCD2 row count is at most one per business key.
+- Payment allocations balance back to order-level payments.
 
 ### Mart Tests
 
