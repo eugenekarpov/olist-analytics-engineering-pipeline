@@ -101,9 +101,14 @@ rejections are recorded in `audit.dead_letter_events`; threshold breaches stop
 the DAG before warehouse load while leaving the dead-letter files available for
 inspection.
 
-The interview story is: "I do not let one bad row poison the whole raw load
-when the business has agreed on a threshold, but I also do not hide the bad
-data. It is isolated, counted, audited, and visible for replay/fix workflows."
+Replay is intentionally separate from the main batch load. After a dead-letter
+file is corrected, `scripts/loading/replay_dead_letters.py` validates the fixed
+rows, deletes any prior replay rows for the same `replay_id`, inserts the fixed
+rows into the raw table, and records `audit.dead_letter_replays`.
+
+The interview story is: "I do not let one bad row poison the whole raw load when
+the business has agreed on a threshold, but I also do not hide the bad data. It
+is isolated, counted, audited, and replayable after correction."
 
 ## Dimensional Modeling Talking Points
 

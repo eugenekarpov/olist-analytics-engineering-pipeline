@@ -116,6 +116,15 @@ records are written to the dead-letter zone and the run continues only while
 the rejected rows stay within the configured threshold
 (`--dead-letter-max-rows`, `--dead-letter-max-rate`).
 
+For a reproducible DLQ demo, create a copy of the archive with one corrupt
+record, run ingestion against it, fix the dead-letter CSV, and replay the fixed
+row:
+
+```powershell
+python scripts\utilities\create_dead_letter_demo_archive.py
+python scripts\loading\replay_dead_letters.py --entity order_payments --dead-letter-file <fixed_dead_letter_csv_gz> --replay-id demo_payment_fix
+```
+
 Load raw files into PostgreSQL:
 
 ```powershell
@@ -183,6 +192,8 @@ validate_source_contract
   `_source_file`, and `_source_system`.
 - Dead-letter events are audited in `audit.dead_letter_events` alongside raw
   load attempts in `audit.load_runs`.
+- Corrected dead-letter rows can be replayed idempotently and audited in
+  `audit.dead_letter_replays`.
 - Staging models are views; core dimensions, facts, and marts are tables.
 
 ## Current Status

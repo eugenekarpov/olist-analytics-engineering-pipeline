@@ -174,6 +174,55 @@ docker compose exec -T postgres psql -U olist -d olist_analytics `
   -c "select batch_id, entity_name, failed_rows, valid_rows, reason_summary from audit.dead_letter_events order by created_at desc;"
 ```
 
+## Dead-Letter Demo And Replay
+
+Create a demo archive with one corrupt `payment_value` while preserving the same
+source headers and row counts:
+
+```powershell
+python scripts\utilities\create_dead_letter_demo_archive.py
+```
+
+Run ingestion against that archive:
+
+```powershell
+python scripts\ingestion\prepare_olist_raw_files.py `
+  --archive data/demo/dead_letter/olist_dead_letter_demo.zip `
+  --output-dir data/raw/olist_dead_letter_demo `
+  --batch-date 2018-09-01 `
+  --batch-id 2018-09-01 `
+  --run-id dead_letter_demo `
+  --dead-letter-max-rows 10 `
+  --dead-letter-max-rate 0.001
+```
+
+The corrupt row lands in:
+
+```text
+data/raw/olist_dead_letter_demo/dead_letter/order_payments/batch_date=2018-09-01/run_id=dead_letter_demo/order_payments.csv.gz
+```
+
+After correcting the value in a dead-letter CSV, replay it into the raw table:
+
+```powershell
+python scripts\loading\replay_dead_letters.py `
+  --entity order_payments `
+  --dead-letter-file data/raw/olist_dead_letter_demo/dead_letter/order_payments/batch_date=2018-09-01/run_id=dead_letter_demo/order_payments.csv.gz `
+  --replay-id demo_payment_fix `
+  --bootstrap-sql-dir infra/postgres
+```
+
+The replay is idempotent for the same `replay_id`: previous rows with the same
+`_batch_id`, `_source_file`, and `_source_system` are deleted before the fixed
+rows are inserted.
+
+Inspect replay attempts:
+
+```powershell
+docker compose exec -T postgres psql -U olist -d olist_analytics `
+  -c "select batch_id, entity_name, status, rows_replayed, replay_source_file from audit.dead_letter_replays order by started_at desc;"
+```
+
 ## AWS / Redshift Path
 
 The AWS path is preserved but no longer default:

@@ -53,10 +53,13 @@ flowchart LR
     rowcheck["Row-level type and length validation"]
     valid["Valid raw CSV.gz"]
     rejected["Dead-letter CSV.gz"]
+    corrected["Corrected dead-letter CSV.gz"]
     threshold["Threshold check"]
     load["PostgreSQL raw load"]
+    replay["Replay fixed rows"]
     stop["Stop DAG before load"]
     audit["audit.dead_letter_events"]
+    replayaudit["audit.dead_letter_replays"]
 
     archive --> contract
     contract --> rowcheck
@@ -66,6 +69,9 @@ flowchart LR
     threshold -->|within threshold| load
     threshold -->|exceeded| stop
     load --> audit
+    rejected --> corrected
+    corrected --> replay
+    replay --> replayaudit
 ```
 
 ## Warehouse Layers

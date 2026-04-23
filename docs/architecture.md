@@ -163,6 +163,10 @@ failures:
   and rejected row rate stay within configured bounds.
 - `audit.dead_letter_events` records the rejected count, valid count, threshold
   values, dead-letter URI, and reason summary for the batch/entity.
+- Corrected dead-letter rows can be replayed into raw tables without replacing
+  the whole batch. The replay uses a stable `replay_id` as `_source_file`, first
+  deletes any previous replay rows with the same identity, then inserts the
+  corrected rows and records `audit.dead_letter_replays`.
 
 This models a production pattern where bad messages are isolated for follow-up
 without losing visibility into the successful part of the batch.
