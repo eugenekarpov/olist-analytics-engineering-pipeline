@@ -104,6 +104,12 @@ Validate the local archive:
 python scripts\utilities\validate_source_contract.py
 ```
 
+Run fast Python tests for ingestion, dead-letter, and replay logic:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
 Prepare local raw files:
 
 ```powershell

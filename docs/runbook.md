@@ -50,6 +50,12 @@ Validate the archive:
 python scripts\utilities\validate_source_contract.py
 ```
 
+Run fast Python tests:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
 Prepare raw files in the local raw zone:
 
 ```powershell
