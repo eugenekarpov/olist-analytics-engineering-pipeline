@@ -17,6 +17,7 @@ and quality gates.
 - Local-first data warehouse development with Docker.
 - Storage contract abstraction: filesystem locally, S3 later.
 - Warehouse load pattern with idempotent raw loads and audit rows.
+- Batch control state machine independent of Airflow UI state.
 - Orchestration with Airflow.
 - dbt project structure and layered modeling.
 - Source contracts and schema validation.
@@ -65,6 +66,18 @@ Airflow provides the operational wrapper:
 - backfill parameters;
 - failure visibility;
 - separation between ingestion, load, snapshots, build, and test.
+
+The warehouse also stores `audit.batch_runs`, so batch state is queryable even
+outside Airflow:
+
+```text
+STARTED -> SOURCE_VALIDATED -> RAW_PREPARED -> RAW_LOADED
+  -> DBT_SNAPSHOT_INPUTS_BUILT -> DBT_SNAPSHOTTED -> DBT_BUILT -> TESTED
+```
+
+`FAILED` can be recorded from any state. The helper refuses accidental backward
+transitions, which protects reruns and manual recovery work from overwriting the
+true latest batch state.
 
 ## Dead Letter Pattern Talking Points
 

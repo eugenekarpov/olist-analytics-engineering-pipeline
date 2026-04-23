@@ -23,6 +23,20 @@ create table if not exists audit.dbt_runs (
     error_message varchar(65535)
 );
 
+create table if not exists audit.batch_runs (
+    batch_id varchar(128) not null,
+    batch_date date not null,
+    orchestration_run_id varchar(128) not null,
+    dag_id varchar(256),
+    status varchar(64) not null,
+    started_at timestamp not null,
+    updated_at timestamp not null,
+    finished_at timestamp,
+    raw_manifest_uri varchar(1024),
+    correction_manifest_uri varchar(1024),
+    error_message varchar(65535)
+);
+
 create table if not exists audit.dead_letter_events (
     dead_letter_event_id varchar(256) not null,
     batch_id varchar(128) not null,

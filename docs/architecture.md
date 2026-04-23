@@ -89,6 +89,10 @@ audit
 Raw files are loaded with PostgreSQL `COPY FROM STDIN`, streamed from Python so
 gzip files do not need to be manually extracted.
 
+The audit schema also owns batch-level control metadata. `audit.batch_runs`
+stores the current state of each logical batch independently of Airflow task
+history.
+
 ### Apache Airflow
 
 Airflow orchestrates the local pipeline with a dedicated DAG:
@@ -100,14 +104,21 @@ olist_modern_data_stack_local
 Task flow:
 
 ```text
+start_batch
 validate_source_contract
+mark_source_validated
 prepare_raw_files
 generate_correction_feeds
+mark_raw_prepared
 load_raw_files_to_postgres
 dbt_run_snapshot_inputs
+mark_snapshot_inputs_built
 dbt_snapshot
+mark_dbt_snapshotted
 dbt_build
+mark_dbt_built
 dbt_test
+mark_tested
 ```
 
 The previous AWS DAG is preserved separately as:
@@ -150,6 +161,33 @@ Each run writes raw files and then loads them idempotently:
    `run_id`.
 
 This mirrors the original Redshift load semantics while avoiding AWS.
+
+## Batch Control
+
+Airflow is the orchestrator, but the warehouse keeps its own batch state in
+`audit.batch_runs`. This gives operators and downstream checks a stable control
+record even if Airflow logs are rotated or a run is resumed manually.
+
+State progression:
+
+```text
+STARTED
+SOURCE_VALIDATED
+RAW_PREPARED
+RAW_LOADED
+DBT_SNAPSHOT_INPUTS_BUILT
+DBT_SNAPSHOTTED
+DBT_BUILT
+TESTED
+```
+
+`FAILED` is allowed from any state. The helper script refuses accidental
+backward transitions, so a stale task cannot silently move a batch from
+`RAW_LOADED` back to `RAW_PREPARED`.
+
+The local DAG starts a batch control record before source validation, marks
+success milestones after each major stage, and uses an Airflow failure callback
+to mark the batch `FAILED` with the failing task and error message.
 
 ## Dead Letter Pattern
 

@@ -10,6 +10,7 @@ Record-level ingestion failures land under
 `data/raw/olist/dead_letter/<entity>/batch_date=<date>/run_id=<run_id>/`.
 Within-threshold events are recorded in `audit.dead_letter_events`.
 Manual replay attempts are recorded in `audit.dead_letter_replays`.
+Batch-level pipeline state is recorded in `audit.batch_runs`.
 
 Run order:
 

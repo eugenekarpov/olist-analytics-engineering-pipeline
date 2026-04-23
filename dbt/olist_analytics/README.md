@@ -34,6 +34,7 @@ dbt run --select staging intermediate --vars '{batch_date: "2018-09-01"}'
 dbt snapshot --vars '{batch_date: "2018-09-01"}'
 dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
 dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'
+dbt compile --select batch_runs
 dbt compile --select dead_letter_events
 dbt compile --select dead_letter_replays
 ```
@@ -44,9 +45,9 @@ to warehouse schemas such as `staging`, `intermediate`, `core`, and `marts`.
 Small Postgres/Redshift SQL differences are isolated in compatibility macros
 under `macros/warehouse_compat.sql`.
 
-The `analyses/dead_letter_events.sql` and
+The `analyses/batch_runs.sql`, `analyses/dead_letter_events.sql`, and
 `analyses/dead_letter_replays.sql` queries are lightweight dbt entry points for
-reviewing rejected raw records and replay attempts.
+reviewing batch state, rejected raw records, and replay attempts.
 
 ## Data Quality Tests
 

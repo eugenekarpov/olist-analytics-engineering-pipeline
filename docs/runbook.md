@@ -180,6 +180,29 @@ docker compose exec -T postgres psql -U olist -d olist_analytics `
   -c "select batch_id, entity_name, failed_rows, valid_rows, reason_summary from audit.dead_letter_events order by created_at desc;"
 ```
 
+Inspect batch control state:
+
+```powershell
+docker compose exec -T postgres psql -U olist -d olist_analytics `
+  -c "select batch_id, orchestration_run_id, status, started_at, updated_at, finished_at from audit.batch_runs order by updated_at desc;"
+```
+
+For manual runs, start or update a batch control record directly:
+
+```powershell
+python scripts\orchestration\batch_control.py start `
+  --bootstrap-sql-dir infra/postgres `
+  --batch-date 2018-09-01 `
+  --batch-id 2018-09-01 `
+  --run-id manual_2018_09_01
+
+python scripts\orchestration\batch_control.py mark `
+  --batch-date 2018-09-01 `
+  --batch-id 2018-09-01 `
+  --run-id manual_2018_09_01 `
+  --status TESTED
+```
+
 ## Dead-Letter Demo And Replay
 
 Create a demo archive with one corrupt `payment_value` while preserving the same

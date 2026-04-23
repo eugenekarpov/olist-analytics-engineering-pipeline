@@ -12,6 +12,7 @@ flowchart LR
     dlq["Dead-letter zone"]
     copy["PostgreSQL COPY FROM STDIN"]
     raw["raw schema"]
+    batchcontrol["audit.batch_runs"]
     audit["audit.dead_letter_events"]
     staging["dbt staging views"]
     intermediate["dbt intermediate models"]
@@ -23,6 +24,7 @@ flowchart LR
     airflow --> ingestion
     airflow --> corrections
     airflow --> copy
+    airflow --> batchcontrol
     airflow --> snapshots
     airflow --> core
     airflow --> marts
@@ -35,6 +37,7 @@ flowchart LR
     dlq --> audit
     rawzone --> copy
     copy --> raw
+    copy --> batchcontrol
     raw --> staging
     staging --> intermediate
     intermediate --> snapshots
@@ -98,6 +101,29 @@ flowchart TB
     staging -.-> tests
     core -.-> tests
     marts -.-> tests
+```
+
+## Batch Control State
+
+```mermaid
+stateDiagram-v2
+    [*] --> STARTED
+    STARTED --> SOURCE_VALIDATED
+    SOURCE_VALIDATED --> RAW_PREPARED
+    RAW_PREPARED --> RAW_LOADED
+    RAW_LOADED --> DBT_SNAPSHOT_INPUTS_BUILT
+    DBT_SNAPSHOT_INPUTS_BUILT --> DBT_SNAPSHOTTED
+    DBT_SNAPSHOTTED --> DBT_BUILT
+    DBT_BUILT --> TESTED
+    STARTED --> FAILED
+    SOURCE_VALIDATED --> FAILED
+    RAW_PREPARED --> FAILED
+    RAW_LOADED --> FAILED
+    DBT_SNAPSHOT_INPUTS_BUILT --> FAILED
+    DBT_SNAPSHOTTED --> FAILED
+    DBT_BUILT --> FAILED
+    TESTED --> [*]
+    FAILED --> [*]
 ```
 
 ## Core Star Schema

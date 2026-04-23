@@ -7,6 +7,7 @@ S3-shaped raw zone and PostgreSQL in Docker instead of S3 and Redshift.
 from __future__ import annotations
 
 import os
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -27,10 +28,76 @@ LOCAL_RUN_ID = "{{ run_id | replace(':', '_') | replace('+', '_') }}"
 LOCAL_BATCH_ID = "{{ params.batch_date }}"
 
 
+POSTGRES_ENV = {
+    **os.environ,
+    "POSTGRES_HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+    "POSTGRES_PORT": os.environ.get("POSTGRES_PORT", "5432"),
+    "POSTGRES_DB": os.environ.get("POSTGRES_DB", "olist_analytics"),
+    "POSTGRES_USER": os.environ.get("POSTGRES_USER", "olist"),
+    "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "olist"),
+}
+
+
+def batch_control_command(command: str, status: str | None = None) -> str:
+    status_arg = f" --status {status}" if status else ""
+    bootstrap_arg = (
+        f" --bootstrap-sql-dir {POSTGRES_SQL_DIR}" if command == "start" else ""
+    )
+    return (
+        f"{PYTHON_BIN} scripts/orchestration/batch_control.py {command} "
+        "--batch-date '{{ params.batch_date }}' "
+        f"--batch-id '{LOCAL_BATCH_ID}' "
+        f"--run-id '{LOCAL_RUN_ID}' "
+        f"--dag-id {DAG_ID} "
+        f"--raw-dir {LOCAL_RAW_DIR}"
+        f"{bootstrap_arg}"
+        f"{status_arg}"
+    )
+
+
+def local_run_id(run_id: str) -> str:
+    return run_id.replace(":", "_").replace("+", "_")
+
+
+def mark_batch_failed(context: dict) -> None:
+    params = context.get("params") or {}
+    task_instance = context.get("task_instance")
+    task_id = getattr(task_instance, "task_id", "unknown_task")
+    exception = context.get("exception")
+    batch_date = str(params.get("batch_date", "2018-09-01"))
+    error_message = f"{task_id}: {exception}"[:65535]
+
+    subprocess.run(
+        [
+            PYTHON_BIN,
+            "scripts/orchestration/batch_control.py",
+            "fail",
+            "--batch-date",
+            batch_date,
+            "--batch-id",
+            batch_date,
+            "--run-id",
+            local_run_id(str(context.get("run_id", "unknown_run"))),
+            "--dag-id",
+            DAG_ID,
+            "--raw-dir",
+            LOCAL_RAW_DIR,
+            "--bootstrap-sql-dir",
+            POSTGRES_SQL_DIR,
+            "--error-message",
+            error_message,
+        ],
+        cwd=str(PROJECT_ROOT),
+        env=POSTGRES_ENV,
+        check=False,
+    )
+
+
 default_args = {
     "owner": "data-engineering",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
+    "on_failure_callback": mark_batch_failed,
 }
 
 
@@ -53,6 +120,13 @@ with DAG(
 ) as dag:
     start = EmptyOperator(task_id="start")
 
+    start_batch = BashOperator(
+        task_id="start_batch",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("start"),
+        env=POSTGRES_ENV,
+    )
+
     validate_source_contract = BashOperator(
         task_id="validate_source_contract",
         cwd=str(PROJECT_ROOT),
@@ -61,6 +135,13 @@ with DAG(
             "--archive olist.zip "
             "--profile docs/source_profile.json"
         ),
+    )
+
+    mark_source_validated = BashOperator(
+        task_id="mark_source_validated",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("mark", "SOURCE_VALIDATED"),
+        env=POSTGRES_ENV,
     )
 
     prepare_raw_files = BashOperator(
@@ -94,6 +175,13 @@ with DAG(
         ),
     )
 
+    mark_raw_prepared = BashOperator(
+        task_id="mark_raw_prepared",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("mark", "RAW_PREPARED"),
+        env=POSTGRES_ENV,
+    )
+
     load_raw_files_to_postgres = BashOperator(
         task_id="load_raw_files_to_postgres",
         cwd=str(PROJECT_ROOT),
@@ -104,16 +192,10 @@ with DAG(
             f"--bootstrap-sql-dir {POSTGRES_SQL_DIR} "
             "--batch-date '{{ params.batch_date }}' "
             f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}'"
+            f"--run-id '{LOCAL_RUN_ID}' "
+            f"--dag-id {DAG_ID}"
         ),
-        env={
-            **os.environ,
-            "POSTGRES_HOST": os.environ.get("POSTGRES_HOST", "localhost"),
-            "POSTGRES_PORT": os.environ.get("POSTGRES_PORT", "5432"),
-            "POSTGRES_DB": os.environ.get("POSTGRES_DB", "olist_analytics"),
-            "POSTGRES_USER": os.environ.get("POSTGRES_USER", "olist"),
-            "POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD", "olist"),
-        },
+        env=POSTGRES_ENV,
     )
 
     dbt_run_snapshot_inputs = BashOperator(
@@ -125,10 +207,24 @@ with DAG(
         ),
     )
 
+    mark_snapshot_inputs_built = BashOperator(
+        task_id="mark_snapshot_inputs_built",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("mark", "DBT_SNAPSHOT_INPUTS_BUILT"),
+        env=POSTGRES_ENV,
+    )
+
     dbt_snapshot = BashOperator(
         task_id="dbt_snapshot",
         cwd=str(DBT_PROJECT_DIR),
         bash_command="dbt snapshot --vars '{batch_date: \"{{ params.batch_date }}\"}'",
+    )
+
+    mark_dbt_snapshotted = BashOperator(
+        task_id="mark_dbt_snapshotted",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("mark", "DBT_SNAPSHOTTED"),
+        env=POSTGRES_ENV,
     )
 
     dbt_build_command = (
@@ -149,6 +245,13 @@ with DAG(
         ),
     )
 
+    mark_dbt_built = BashOperator(
+        task_id="mark_dbt_built",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("mark", "DBT_BUILT"),
+        env=POSTGRES_ENV,
+    )
+
     dbt_test = BashOperator(
         task_id="dbt_test",
         cwd=str(DBT_PROJECT_DIR),
@@ -158,17 +261,31 @@ with DAG(
         ),
     )
 
+    mark_tested = BashOperator(
+        task_id="mark_tested",
+        cwd=str(PROJECT_ROOT),
+        bash_command=batch_control_command("mark", "TESTED"),
+        env=POSTGRES_ENV,
+    )
+
     end = EmptyOperator(task_id="end")
 
     _ = (
         start
+        >> start_batch
         >> validate_source_contract
+        >> mark_source_validated
         >> prepare_raw_files
         >> generate_correction_feeds
+        >> mark_raw_prepared
         >> load_raw_files_to_postgres
         >> dbt_run_snapshot_inputs
+        >> mark_snapshot_inputs_built
         >> dbt_snapshot
+        >> mark_dbt_snapshotted
         >> dbt_build
+        >> mark_dbt_built
         >> dbt_test
+        >> mark_tested
         >> end
     )

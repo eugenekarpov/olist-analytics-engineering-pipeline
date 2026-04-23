@@ -22,6 +22,11 @@ from scripts.ingestion.record_validation import (
 )
 from scripts.loading.load_raw_to_postgres import load_dead_letter_manifest_entries
 from scripts.loading.replay_dead_letters import ReplaySpec, build_replay_payload
+from scripts.orchestration.batch_control import (
+    ManifestUris,
+    manifest_uris,
+    validate_transition,
+)
 from scripts.utilities.create_dead_letter_demo_archive import create_demo_archive
 
 
@@ -249,6 +254,34 @@ class DeadLetterDemoArchiveTests(unittest.TestCase):
                 "id,payment_value\n1,10.00\n2,not_a_decimal\n",
             )
             self.assertEqual(untouched, "id,name\n1,ok\n")
+
+
+class BatchControlTests(unittest.TestCase):
+    def test_validate_transition_allows_forward_and_blocks_backward_moves(self) -> None:
+        validate_transition(None, "STARTED")
+        validate_transition("STARTED", "SOURCE_VALIDATED")
+        validate_transition("RAW_LOADED", "RAW_LOADED")
+        validate_transition("DBT_BUILT", "FAILED")
+
+        with self.assertRaisesRegex(ValueError, "Cannot move batch backwards"):
+            validate_transition("RAW_LOADED", "RAW_PREPARED")
+
+        with self.assertRaisesRegex(ValueError, "Cannot move batch from terminal status"):
+            validate_transition("TESTED", "RAW_LOADED")
+
+    def test_manifest_uris_are_optional_and_detect_existing_manifests(self) -> None:
+        with temporary_workspace_directory() as tmpdir:
+            raw_dir = Path(tmpdir)
+            self.assertEqual(
+                manifest_uris(raw_dir),
+                ManifestUris(raw_manifest_uri=None, correction_manifest_uri=None),
+            )
+
+            (raw_dir / "manifest.json").write_text("{}", encoding="utf-8")
+            uris = manifest_uris(raw_dir)
+
+            self.assertTrue(uris.raw_manifest_uri.endswith("/manifest.json"))
+            self.assertIsNone(uris.correction_manifest_uri)
 
 
 def read_gzip_csv(path: Path | None) -> list[dict[str, str]]:

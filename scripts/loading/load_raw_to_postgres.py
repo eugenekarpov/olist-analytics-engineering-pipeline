@@ -22,6 +22,7 @@ from psycopg2.extensions import connection as PgConnection
 
 from scripts.ingestion.correction_specs import CORRECTION_FEEDS
 from scripts.ingestion.raw_files import load_source_entities, raw_file_path
+from scripts.orchestration.batch_control import BatchRunContext, mark_batch_status
 
 
 @dataclass(frozen=True)
@@ -364,6 +365,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-date", required=True)
     parser.add_argument("--batch-id")
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--dag-id")
+    parser.add_argument("--disable-batch-control", action="store_true")
     parser.add_argument("--host", default=os.environ.get("POSTGRES_HOST", "localhost"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("POSTGRES_PORT", "5432")))
     parser.add_argument("--database", default=os.environ.get("POSTGRES_DB", "olist_analytics"))
@@ -380,15 +383,40 @@ def main() -> None:
         if args.bootstrap_sql_dir:
             execute_sql_files(connection, Path(args.bootstrap_sql_dir))
 
-        load_all(
-            connection=connection,
-            specs=load_specs(Path(args.profile)),
-            raw_dir=Path(args.raw_dir),
-            batch_date=args.batch_date,
+        raw_dir = Path(args.raw_dir)
+        batch_context = BatchRunContext(
             batch_id=batch_id,
+            batch_date=args.batch_date,
             run_id=args.run_id,
-            dead_letter_entries=load_dead_letter_manifest_entries(Path(args.raw_dir)),
+            dag_id=args.dag_id,
         )
+        try:
+            load_all(
+                connection=connection,
+                specs=load_specs(Path(args.profile)),
+                raw_dir=raw_dir,
+                batch_date=args.batch_date,
+                batch_id=batch_id,
+                run_id=args.run_id,
+                dead_letter_entries=load_dead_letter_manifest_entries(raw_dir),
+            )
+            if not args.disable_batch_control:
+                mark_batch_status(
+                    connection,
+                    batch_context,
+                    "RAW_LOADED",
+                    raw_dir=raw_dir,
+                )
+        except Exception as exc:
+            if not args.disable_batch_control:
+                mark_batch_status(
+                    connection,
+                    batch_context,
+                    "FAILED",
+                    raw_dir=raw_dir,
+                    error_message=str(exc),
+                )
+            raise
     finally:
         connection.close()
 
