@@ -27,6 +27,11 @@ from scripts.orchestration.batch_control import (
     manifest_uris,
     validate_transition,
 )
+from scripts.quality.reconcile_batch import (
+    ReconciliationInput,
+    build_reconciliation_results,
+    evaluate_reconciliation,
+)
 from scripts.utilities.create_dead_letter_demo_archive import create_demo_archive
 
 
@@ -264,7 +269,7 @@ class BatchControlTests(unittest.TestCase):
         validate_transition("DBT_BUILT", "FAILED")
 
         with self.assertRaisesRegex(ValueError, "Cannot move batch backwards"):
-            validate_transition("RAW_LOADED", "RAW_PREPARED")
+            validate_transition("RAW_RECONCILED", "RAW_LOADED")
 
         with self.assertRaisesRegex(ValueError, "Cannot move batch from terminal status"):
             validate_transition("TESTED", "RAW_LOADED")
@@ -282,6 +287,71 @@ class BatchControlTests(unittest.TestCase):
 
             self.assertTrue(uris.raw_manifest_uri.endswith("/manifest.json"))
             self.assertIsNone(uris.correction_manifest_uri)
+
+
+class ReconciliationTests(unittest.TestCase):
+    def test_evaluate_reconciliation_passes_when_counts_balance(self) -> None:
+        result = evaluate_reconciliation(
+            ReconciliationInput(
+                entity_name="order_payments",
+                source_uri="file:///payments.csv.gz",
+                expected_source_rows=10,
+                prepared_total_rows=10,
+                prepared_valid_rows=9,
+                dead_letter_rows=1,
+                replayed_rows=1,
+                raw_loaded_rows=10,
+            )
+        )
+
+        self.assertEqual(result.status, "PASS")
+        self.assertIsNone(result.failed_checks)
+        self.assertEqual(result.expected_loaded_rows, 10)
+        self.assertEqual(result.source_to_prepared_delta, 0)
+        self.assertEqual(result.prepared_to_loaded_delta, 0)
+
+    def test_evaluate_reconciliation_fails_on_manifest_and_load_mismatch(self) -> None:
+        result = evaluate_reconciliation(
+            ReconciliationInput(
+                entity_name="orders",
+                source_uri="file:///orders.csv.gz",
+                expected_source_rows=10,
+                prepared_total_rows=9,
+                prepared_valid_rows=8,
+                dead_letter_rows=0,
+                replayed_rows=0,
+                raw_loaded_rows=7,
+            )
+        )
+
+        self.assertEqual(result.status, "FAIL")
+        self.assertIn("source_to_prepared_count_mismatch", result.failed_checks or "")
+        self.assertIn("valid_plus_dead_letter_count_mismatch", result.failed_checks or "")
+        self.assertIn("prepared_to_loaded_count_mismatch", result.failed_checks or "")
+
+    def test_build_reconciliation_results_uses_manifest_totals_for_corrections(self) -> None:
+        specs = [
+            SimpleNamespace(entity_name="customer_profile_changes"),
+        ]
+        manifest_entry = SimpleNamespace(
+            entity_name="customer_profile_changes",
+            source_uri="file:///customer_profile_changes.csv.gz",
+            total_rows=20,
+            valid_rows=20,
+            failed_rows=0,
+        )
+
+        results = build_reconciliation_results(
+            specs=specs,
+            expected_source_rows={},
+            manifest_entries={"customer_profile_changes": manifest_entry},
+            raw_loaded_rows={"customer_profile_changes": 20},
+            replayed_rows={},
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].expected_source_rows, 20)
+        self.assertEqual(results[0].status, "PASS")
 
 
 def read_gzip_csv(path: Path | None) -> list[dict[str, str]]:

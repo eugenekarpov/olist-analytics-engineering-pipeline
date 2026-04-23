@@ -11,6 +11,7 @@ Record-level ingestion failures land under
 Within-threshold events are recorded in `audit.dead_letter_events`.
 Manual replay attempts are recorded in `audit.dead_letter_replays`.
 Batch-level pipeline state is recorded in `audit.batch_runs`.
+Raw load control totals are recorded in `audit.batch_reconciliation`.
 
 Run order:
 

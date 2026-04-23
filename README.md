@@ -39,6 +39,7 @@ can be backed by S3; locally, they are backed by the filesystem.
 - Reproducible local data warehouse workflow with Docker.
 - Raw landing-zone contract independent of a specific storage backend.
 - Batch control state machine persisted in the warehouse audit schema.
+- Reconciliation of source, prepared, dead-letter, replay, and raw load counts.
 - Dead Letter Pattern for record-level ingestion failures with threshold mode.
 - PostgreSQL warehouse loading with `COPY FROM STDIN`.
 - Airflow orchestration with retries, params, and task-level visibility.
@@ -203,6 +204,8 @@ validate_source_contract
   `audit.dead_letter_replays`.
 - Batch lifecycle is tracked in `audit.batch_runs`, independently of Airflow UI
   state.
+- Raw load control totals are tracked in `audit.batch_reconciliation` and fail
+  the DAG before dbt if counts drift.
 - Staging models are views; core dimensions, facts, and marts are tables.
 
 ## Current Status

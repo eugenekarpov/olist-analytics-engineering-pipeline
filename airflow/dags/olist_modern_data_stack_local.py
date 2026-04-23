@@ -198,6 +198,22 @@ with DAG(
         env=POSTGRES_ENV,
     )
 
+    reconcile_raw_load = BashOperator(
+        task_id="reconcile_raw_load",
+        cwd=str(PROJECT_ROOT),
+        bash_command=(
+            f"{PYTHON_BIN} scripts/quality/reconcile_batch.py "
+            f"--raw-dir {LOCAL_RAW_DIR} "
+            "--profile docs/source_profile.json "
+            f"--bootstrap-sql-dir {POSTGRES_SQL_DIR} "
+            "--batch-date '{{ params.batch_date }}' "
+            f"--batch-id '{LOCAL_BATCH_ID}' "
+            f"--run-id '{LOCAL_RUN_ID}' "
+            f"--dag-id {DAG_ID}"
+        ),
+        env=POSTGRES_ENV,
+    )
+
     dbt_run_snapshot_inputs = BashOperator(
         task_id="dbt_run_snapshot_inputs",
         cwd=str(DBT_PROJECT_DIR),
@@ -279,6 +295,7 @@ with DAG(
         >> generate_correction_feeds
         >> mark_raw_prepared
         >> load_raw_files_to_postgres
+        >> reconcile_raw_load
         >> dbt_run_snapshot_inputs
         >> mark_snapshot_inputs_built
         >> dbt_snapshot

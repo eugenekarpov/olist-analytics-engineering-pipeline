@@ -43,6 +43,27 @@ create table if not exists audit.batch_runs (
 diststyle auto
 sortkey(started_at);
 
+create table if not exists audit.batch_reconciliation (
+    reconciliation_run_id varchar(128) not null encode zstd,
+    batch_id varchar(128) not null encode zstd,
+    entity_name varchar(128) not null encode zstd,
+    source_uri varchar(1024) encode zstd,
+    expected_source_rows bigint encode az64,
+    prepared_total_rows bigint encode az64,
+    prepared_valid_rows bigint encode az64,
+    dead_letter_rows bigint encode az64,
+    replayed_rows bigint not null encode az64,
+    expected_loaded_rows bigint encode az64,
+    raw_loaded_rows bigint not null encode az64,
+    source_to_prepared_delta bigint encode az64,
+    prepared_to_loaded_delta bigint encode az64,
+    status varchar(32) not null encode zstd,
+    failed_checks varchar(1024) encode zstd,
+    created_at timestamp not null encode az64
+)
+diststyle auto
+sortkey(created_at);
+
 create table if not exists audit.dead_letter_events (
     dead_letter_event_id varchar(256) not null encode zstd,
     batch_id varchar(128) not null encode zstd,

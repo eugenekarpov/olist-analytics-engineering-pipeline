@@ -111,6 +111,7 @@ prepare_raw_files
 generate_correction_feeds
 mark_raw_prepared
 load_raw_files_to_postgres
+reconcile_raw_load
 dbt_run_snapshot_inputs
 mark_snapshot_inputs_built
 dbt_snapshot
@@ -175,6 +176,7 @@ STARTED
 SOURCE_VALIDATED
 RAW_PREPARED
 RAW_LOADED
+RAW_RECONCILED
 DBT_SNAPSHOT_INPUTS_BUILT
 DBT_SNAPSHOTTED
 DBT_BUILT
@@ -188,6 +190,33 @@ backward transitions, so a stale task cannot silently move a batch from
 The local DAG starts a batch control record before source validation, marks
 success milestones after each major stage, and uses an Airflow failure callback
 to mark the batch `FAILED` with the failing task and error message.
+
+## Reconciliation
+
+After the raw PostgreSQL load, the pipeline reconciles control totals before dbt
+starts. Results are written to `audit.batch_reconciliation`.
+
+Per entity, reconciliation compares:
+
+- expected source rows from `docs/source_profile.json` for Olist source files;
+- generated manifest totals for correction feeds;
+- prepared total rows;
+- valid rows written to raw files;
+- dead-letter rows;
+- successful replay rows;
+- rows currently present in the `raw` table for the `_batch_id`.
+
+The core equations are:
+
+```text
+prepared_total_rows = expected_source_rows
+prepared_valid_rows + dead_letter_rows = prepared_total_rows
+raw_loaded_rows = prepared_valid_rows + replayed_rows
+```
+
+A mismatch fails the Airflow task before snapshots or marts are built. This
+protects against silent data loss, duplicated loads, and incomplete file
+preparation.
 
 ## Dead Letter Pattern
 

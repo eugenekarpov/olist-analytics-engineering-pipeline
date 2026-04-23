@@ -11,6 +11,7 @@ flowchart LR
     rawzone["Local S3-shaped raw zone"]
     dlq["Dead-letter zone"]
     copy["PostgreSQL COPY FROM STDIN"]
+    reconcile["Reconciliation"]
     raw["raw schema"]
     batchcontrol["audit.batch_runs"]
     audit["audit.dead_letter_events"]
@@ -38,6 +39,9 @@ flowchart LR
     rawzone --> copy
     copy --> raw
     copy --> batchcontrol
+    raw --> reconcile
+    rawzone --> reconcile
+    reconcile --> batchcontrol
     raw --> staging
     staging --> intermediate
     intermediate --> snapshots
@@ -111,7 +115,8 @@ stateDiagram-v2
     STARTED --> SOURCE_VALIDATED
     SOURCE_VALIDATED --> RAW_PREPARED
     RAW_PREPARED --> RAW_LOADED
-    RAW_LOADED --> DBT_SNAPSHOT_INPUTS_BUILT
+    RAW_LOADED --> RAW_RECONCILED
+    RAW_RECONCILED --> DBT_SNAPSHOT_INPUTS_BUILT
     DBT_SNAPSHOT_INPUTS_BUILT --> DBT_SNAPSHOTTED
     DBT_SNAPSHOTTED --> DBT_BUILT
     DBT_BUILT --> TESTED
@@ -119,6 +124,7 @@ stateDiagram-v2
     SOURCE_VALIDATED --> FAILED
     RAW_PREPARED --> FAILED
     RAW_LOADED --> FAILED
+    RAW_RECONCILED --> FAILED
     DBT_SNAPSHOT_INPUTS_BUILT --> FAILED
     DBT_SNAPSHOTTED --> FAILED
     DBT_BUILT --> FAILED

@@ -18,6 +18,7 @@ and quality gates.
 - Storage contract abstraction: filesystem locally, S3 later.
 - Warehouse load pattern with idempotent raw loads and audit rows.
 - Batch control state machine independent of Airflow UI state.
+- Reconciliation control totals before publishing transformed models.
 - Orchestration with Airflow.
 - dbt project structure and layered modeling.
 - Source contracts and schema validation.
@@ -72,12 +73,24 @@ outside Airflow:
 
 ```text
 STARTED -> SOURCE_VALIDATED -> RAW_PREPARED -> RAW_LOADED
-  -> DBT_SNAPSHOT_INPUTS_BUILT -> DBT_SNAPSHOTTED -> DBT_BUILT -> TESTED
+  -> RAW_RECONCILED -> DBT_SNAPSHOT_INPUTS_BUILT
+  -> DBT_SNAPSHOTTED -> DBT_BUILT -> TESTED
 ```
 
 `FAILED` can be recorded from any state. The helper refuses accidental backward
 transitions, which protects reruns and manual recovery work from overwriting the
 true latest batch state.
+
+Reconciliation is the guard between raw loading and dbt. For each entity, the
+pipeline checks:
+
+```text
+source rows = prepared valid rows + dead-letter rows
+raw loaded rows = prepared valid rows + successful replay rows
+```
+
+The point is to catch silent data loss or accidental duplicates, not just hard
+SQL failures.
 
 ## Dead Letter Pattern Talking Points
 

@@ -187,6 +187,25 @@ docker compose exec -T postgres psql -U olist -d olist_analytics `
   -c "select batch_id, orchestration_run_id, status, started_at, updated_at, finished_at from audit.batch_runs order by updated_at desc;"
 ```
 
+Run reconciliation manually after raw load:
+
+```powershell
+python scripts\quality\reconcile_batch.py `
+  --raw-dir data/raw/olist `
+  --profile docs/source_profile.json `
+  --bootstrap-sql-dir infra/postgres `
+  --batch-date 2018-09-01 `
+  --batch-id 2018-09-01 `
+  --run-id manual_2018_09_01
+```
+
+Inspect reconciliation results:
+
+```powershell
+docker compose exec -T postgres psql -U olist -d olist_analytics `
+  -c "select batch_id, entity_name, status, expected_loaded_rows, raw_loaded_rows, failed_checks from audit.batch_reconciliation order by created_at desc, entity_name;"
+```
+
 For manual runs, start or update a batch control record directly:
 
 ```powershell

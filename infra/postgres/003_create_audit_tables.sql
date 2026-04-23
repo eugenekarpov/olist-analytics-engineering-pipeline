@@ -37,6 +37,25 @@ create table if not exists audit.batch_runs (
     error_message varchar(65535)
 );
 
+create table if not exists audit.batch_reconciliation (
+    reconciliation_run_id varchar(128) not null,
+    batch_id varchar(128) not null,
+    entity_name varchar(128) not null,
+    source_uri varchar(1024),
+    expected_source_rows bigint,
+    prepared_total_rows bigint,
+    prepared_valid_rows bigint,
+    dead_letter_rows bigint,
+    replayed_rows bigint not null,
+    expected_loaded_rows bigint,
+    raw_loaded_rows bigint not null,
+    source_to_prepared_delta bigint,
+    prepared_to_loaded_delta bigint,
+    status varchar(32) not null,
+    failed_checks varchar(1024),
+    created_at timestamp not null
+);
+
 create table if not exists audit.dead_letter_events (
     dead_letter_event_id varchar(256) not null,
     batch_id varchar(128) not null,
