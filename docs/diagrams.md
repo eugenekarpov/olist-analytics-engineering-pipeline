@@ -7,9 +7,12 @@ flowchart LR
     source["Olist Kaggle CSV archive"]
     corrections["Generated correction feeds"]
     ingestion["Python ingestion scripts"]
+    validation["Row-level validation"]
     rawzone["Local S3-shaped raw zone"]
+    dlq["Dead-letter zone"]
     copy["PostgreSQL COPY FROM STDIN"]
     raw["raw schema"]
+    audit["audit.dead_letter_events"]
     staging["dbt staging views"]
     intermediate["dbt intermediate models"]
     snapshots["dbt snapshots"]
@@ -25,8 +28,11 @@ flowchart LR
     airflow --> marts
 
     source --> ingestion
-    corrections --> rawzone
-    ingestion --> rawzone
+    corrections --> validation
+    ingestion --> validation
+    validation --> rawzone
+    validation --> dlq
+    dlq --> audit
     rawzone --> copy
     copy --> raw
     raw --> staging
@@ -36,6 +42,30 @@ flowchart LR
     staging --> core
     intermediate --> core
     core --> marts
+```
+
+## Dead Letter Flow
+
+```mermaid
+flowchart LR
+    archive["Source CSV rows"]
+    contract["Source contract validation"]
+    rowcheck["Row-level type and length validation"]
+    valid["Valid raw CSV.gz"]
+    rejected["Dead-letter CSV.gz"]
+    threshold["Threshold check"]
+    load["PostgreSQL raw load"]
+    stop["Stop DAG before load"]
+    audit["audit.dead_letter_events"]
+
+    archive --> contract
+    contract --> rowcheck
+    rowcheck --> valid
+    rowcheck --> rejected
+    rejected --> threshold
+    threshold -->|within threshold| load
+    threshold -->|exceeded| stop
+    load --> audit
 ```
 
 ## Warehouse Layers

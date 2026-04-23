@@ -21,6 +21,7 @@ airflow/logs/
 airflow/plugins/
 airflow/airflow.db
 airflow/*.db
+airflow/*.db-journal
 airflow/webserver_config.py
 
 # Environment and secrets

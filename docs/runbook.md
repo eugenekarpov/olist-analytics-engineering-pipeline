@@ -56,7 +56,9 @@ Prepare raw files in the local raw zone:
 python scripts\ingestion\prepare_olist_raw_files.py `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
-  --run-id manual_2018_09_01
+  --run-id manual_2018_09_01 `
+  --dead-letter-max-rows 10 `
+  --dead-letter-max-rate 0.001
 ```
 
 Generate correction feeds:
@@ -65,8 +67,19 @@ Generate correction feeds:
 python scripts\ingestion\generate_correction_feeds.py `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
-  --run-id manual_2018_09_01
+  --run-id manual_2018_09_01 `
+  --dead-letter-max-rows 10 `
+  --dead-letter-max-rate 0.001
 ```
+
+Invalid records are written to:
+
+```text
+data/raw/olist/dead_letter/<entity>/batch_date=<date>/run_id=<run_id>/<entity>.csv.gz
+```
+
+The threshold is enforced after the raw and dead-letter files are written, so a
+failed run still leaves inspectable evidence.
 
 Bootstrap PostgreSQL schemas and load raw files:
 
@@ -118,6 +131,8 @@ Runtime params:
 batch_date: 2018-09-01
 lookback_days: 3
 full_refresh: false
+dead_letter_max_rows: 10
+dead_letter_max_rate: 0.001
 ```
 
 The DAG performs:
@@ -145,11 +160,19 @@ docker compose logs airflow
 The run should fail if:
 
 - Source files are missing or headers change.
+- Row-level ingestion failures exceed the dead-letter threshold.
 - PostgreSQL raw load fails.
 - dbt source freshness fails.
 - Staging/core/mart tests fail.
 - SCD2 dimensions have overlapping windows.
 - SCD2 dimensions have more than one current row per business key.
+
+Inspect dead-letter audit events:
+
+```powershell
+docker compose exec -T postgres psql -U olist -d olist_analytics `
+  -c "select batch_id, entity_name, failed_rows, valid_rows, reason_summary from audit.dead_letter_events order by created_at desc;"
+```
 
 ## AWS / Redshift Path
 

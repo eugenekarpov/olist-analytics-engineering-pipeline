@@ -22,3 +22,19 @@ create table if not exists audit.dbt_runs (
     finished_at timestamp,
     error_message varchar(65535)
 );
+
+create table if not exists audit.dead_letter_events (
+    dead_letter_event_id varchar(256) not null,
+    batch_id varchar(128) not null,
+    load_run_id varchar(128) not null,
+    entity_name varchar(128) not null,
+    source_uri varchar(1024),
+    dead_letter_uri varchar(1024),
+    total_rows bigint not null,
+    valid_rows bigint not null,
+    failed_rows bigint not null,
+    threshold_max_rows bigint not null,
+    threshold_max_rate decimal(18, 8) not null,
+    reason_summary varchar(65535),
+    created_at timestamp not null
+);

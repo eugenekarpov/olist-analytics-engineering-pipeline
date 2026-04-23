@@ -35,3 +35,12 @@ def upload_files_to_s3(
         s3_key = s3_key_for(prefix, prepared_file.relative_path)
         s3_client.upload_file(str(prepared_file.local_path), bucket, s3_key)
         print(f"Uploaded s3://{bucket}/{s3_key}")
+
+        if prepared_file.dead_letter_path and prepared_file.dead_letter_relative_path:
+            dead_letter_key = s3_key_for(prefix, prepared_file.dead_letter_relative_path)
+            s3_client.upload_file(
+                str(prepared_file.dead_letter_path),
+                bucket,
+                dead_letter_key,
+            )
+            print(f"Uploaded s3://{bucket}/{dead_letter_key}")

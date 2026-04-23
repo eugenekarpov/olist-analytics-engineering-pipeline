@@ -26,3 +26,21 @@ create table if not exists audit.dbt_runs (
 )
 diststyle auto
 sortkey(started_at);
+
+create table if not exists audit.dead_letter_events (
+    dead_letter_event_id varchar(256) not null encode zstd,
+    batch_id varchar(128) not null encode zstd,
+    load_run_id varchar(128) not null encode zstd,
+    entity_name varchar(128) not null encode zstd,
+    source_uri varchar(1024) encode zstd,
+    dead_letter_uri varchar(1024) encode zstd,
+    total_rows bigint not null encode az64,
+    valid_rows bigint not null encode az64,
+    failed_rows bigint not null encode az64,
+    threshold_max_rows bigint not null encode az64,
+    threshold_max_rate decimal(18, 8) not null encode az64,
+    reason_summary varchar(65535) encode zstd,
+    created_at timestamp not null encode az64
+)
+diststyle auto
+sortkey(created_at);

@@ -20,6 +20,7 @@ and quality gates.
 - Orchestration with Airflow.
 - dbt project structure and layered modeling.
 - Source contracts and schema validation.
+- Dead Letter Pattern with threshold-based record rejection.
 - Dimensional modeling and star schema design.
 - SCD Type 2 dimensions with dbt snapshots.
 - Business-effective SCD2 joins from fact tables.
@@ -64,6 +65,45 @@ Airflow provides the operational wrapper:
 - backfill parameters;
 - failure visibility;
 - separation between ingestion, load, snapshots, build, and test.
+
+## Dead Letter Pattern Talking Points
+
+The project keeps two failure classes separate:
+
+- Source-contract failures are batch-level problems. Missing files, changed
+  headers, or unexpected source row counts fail fast before ingestion.
+- Record-level failures are data-quality problems. Invalid integer, decimal,
+  timestamp, or varchar values are written to a dead-letter file instead of
+  being sent to PostgreSQL `COPY`.
+
+Dead-letter paths mirror the raw path contract:
+
+```text
+data/raw/olist/dead_letter/<entity>/batch_date=<date>/run_id=<run_id>/<entity>.csv.gz
+```
+
+Each dead-letter row keeps the original fields plus operational metadata:
+
+```text
+_batch_id
+_loaded_at
+_source_file
+_source_system
+_source_row_number
+_dead_letter_stage
+_dead_letter_reason
+_dead_lettered_at
+```
+
+The pipeline uses threshold mode. A run continues only when both rejected row
+count and rejected row rate stay within the configured limits. Accepted
+rejections are recorded in `audit.dead_letter_events`; threshold breaches stop
+the DAG before warehouse load while leaving the dead-letter files available for
+inspection.
+
+The interview story is: "I do not let one bad row poison the whole raw load
+when the business has agreed on a threshold, but I also do not hide the bad
+data. It is isolated, counted, audited, and visible for replay/fix workflows."
 
 ## Dimensional Modeling Talking Points
 

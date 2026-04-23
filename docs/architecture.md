@@ -14,6 +14,7 @@ and `infra/aws`, but it is no longer required for the main development loop.
 ```text
 Local source archive
   -> Python ingestion
+  -> row-level validation and dead-letter files
   -> local raw zone
   -> PostgreSQL raw schema
   -> dbt staging schema
@@ -33,14 +34,20 @@ The local raw path deliberately mirrors the old S3 object key shape:
 
 ```text
 data/raw/olist/raw/<entity>/batch_date=<YYYY-MM-DD>/run_id=<run_id>/<entity>.csv.gz
+data/raw/olist/dead_letter/<entity>/batch_date=<YYYY-MM-DD>/run_id=<run_id>/<entity>.csv.gz
 ```
 
 Responsibilities:
 
 - Validate that all expected source files exist.
 - Validate column names before load.
+- Validate record-level warehouse compatibility for integers, decimals,
+  timestamps, and varchar lengths before `COPY`.
 - Generate deterministic raw file paths.
 - Add `_batch_id`, `_loaded_at`, `_source_file`, and `_source_system`.
+- Write rejected records with `_source_row_number`, `_dead_letter_stage`,
+  `_dead_letter_reason`, and `_dead_lettered_at`.
+- Enforce threshold mode using max rejected rows and max rejected rate.
 - Keep `_batch_id` stable for a logical batch while `run_id` identifies the
   individual Airflow/manual attempt.
 - Support repeatable manual runs and Airflow scheduled runs.
@@ -58,6 +65,10 @@ This gives the project a portable contract:
 raw path contract stays stable
 storage implementation can be local filesystem or S3
 ```
+
+Dead-letter files use the same partitioning scheme as raw files. That keeps
+bad records inspectable and replayable without mixing them into the successful
+raw load.
 
 ### PostgreSQL
 
@@ -129,13 +140,32 @@ model can be kept portable.
 Each run writes raw files and then loads them idempotently:
 
 1. Use `batch_date` as the default stable local `_batch_id`.
-2. Delete rows for the current `_batch_id` from the target raw table.
-3. Delete the matching audit row for the logical batch and entity.
-4. Stream the gzip CSV into PostgreSQL with `COPY FROM STDIN`.
-5. Insert an `audit.load_runs` success or failure row with the concrete
+2. Validate source rows and split invalid rows into the dead-letter zone.
+3. Fail the ingestion task if rejected rows exceed the threshold.
+4. Delete rows for the current `_batch_id` from the target raw table.
+5. Delete the matching audit rows for the logical batch and entity.
+6. Insert `audit.dead_letter_events` when a within-threshold rejection exists.
+7. Stream the valid gzip CSV into PostgreSQL with `COPY FROM STDIN`.
+8. Insert an `audit.load_runs` success or failure row with the concrete
    `run_id`.
 
 This mirrors the original Redshift load semantics while avoiding AWS.
+
+## Dead Letter Pattern
+
+The project separates structural source-contract failures from record-level
+failures:
+
+- Missing files, changed headers, or changed source row counts fail fast.
+- Cast/length problems in individual records are written to
+  `data/raw/olist/dead_letter/...`.
+- Threshold mode allows the run to continue only when both rejected row count
+  and rejected row rate stay within configured bounds.
+- `audit.dead_letter_events` records the rejected count, valid count, threshold
+  values, dead-letter URI, and reason summary for the batch/entity.
+
+This models a production pattern where bad messages are isolated for follow-up
+without losing visibility into the successful part of the batch.
 
 ## Late-Arriving Data
 

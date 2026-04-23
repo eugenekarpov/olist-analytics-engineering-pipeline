@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -27,6 +28,19 @@ from scripts.ingestion.raw_files import load_source_entities, raw_file_path
 class RawLoadSpec:
     entity_name: str
     file_name: str
+
+
+@dataclass(frozen=True)
+class DeadLetterManifestEntry:
+    entity_name: str
+    source_uri: str | None
+    dead_letter_uri: str | None
+    total_rows: int
+    valid_rows: int
+    failed_rows: int
+    threshold_max_rows: int
+    threshold_max_rate: float
+    reason_summary: str
 
 
 def utc_now() -> datetime:
@@ -53,6 +67,43 @@ def load_specs(profile_path: Path) -> list[RawLoadSpec]:
         for feed in CORRECTION_FEEDS
     ]
     return [*source_specs, *correction_specs]
+
+
+def load_dead_letter_manifest_entries(
+    raw_dir: Path,
+) -> dict[str, DeadLetterManifestEntry]:
+    manifest_entries: dict[str, DeadLetterManifestEntry] = {}
+
+    for manifest_name in ("manifest.json", "correction_manifest.json"):
+        manifest_path = raw_dir / manifest_name
+        if not manifest_path.exists():
+            continue
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        threshold = manifest.get("dead_letter_threshold") or {}
+
+        for file_entry in manifest.get("files", []):
+            entity_name = file_entry["entity_name"]
+            dead_letter = file_entry.get("dead_letter") or {}
+            reason_counts = dead_letter.get("reason_counts") or {}
+            manifest_entries[entity_name] = DeadLetterManifestEntry(
+                entity_name=entity_name,
+                source_uri=file_entry.get("local_uri") or file_entry.get("s3_uri"),
+                dead_letter_uri=dead_letter.get("local_uri")
+                or dead_letter.get("s3_uri"),
+                total_rows=int(file_entry.get("total_row_count") or 0),
+                valid_rows=int(
+                    file_entry.get("valid_row_count")
+                    if file_entry.get("valid_row_count") is not None
+                    else file_entry.get("row_count") or 0
+                ),
+                failed_rows=int(file_entry.get("dead_letter_row_count") or 0),
+                threshold_max_rows=int(threshold.get("max_rows") or 0),
+                threshold_max_rate=float(threshold.get("max_rate") or 0),
+                reason_summary=json.dumps(reason_counts, sort_keys=True),
+            )
+
+    return manifest_entries
 
 
 def execute_sql_files(connection: PgConnection, sql_dir: Path) -> None:
@@ -126,6 +177,62 @@ def record_success(
         )
 
 
+def record_dead_letter_event(
+    connection: PgConnection,
+    spec: RawLoadSpec,
+    batch_id: str,
+    run_id: str,
+    manifest_entry: DeadLetterManifestEntry | None,
+) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            delete from audit.dead_letter_events
+            where batch_id = %s
+              and entity_name = %s;
+            """,
+            (batch_id, spec.entity_name),
+        )
+
+        if manifest_entry is None or manifest_entry.failed_rows == 0:
+            return
+
+        cursor.execute(
+            """
+            insert into audit.dead_letter_events (
+                dead_letter_event_id,
+                batch_id,
+                load_run_id,
+                entity_name,
+                source_uri,
+                dead_letter_uri,
+                total_rows,
+                valid_rows,
+                failed_rows,
+                threshold_max_rows,
+                threshold_max_rate,
+                reason_summary,
+                created_at
+            )
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, current_timestamp);
+            """,
+            (
+                f"{batch_id}:{run_id}:{spec.entity_name}",
+                batch_id,
+                run_id,
+                spec.entity_name,
+                manifest_entry.source_uri,
+                manifest_entry.dead_letter_uri,
+                manifest_entry.total_rows,
+                manifest_entry.valid_rows,
+                manifest_entry.failed_rows,
+                manifest_entry.threshold_max_rows,
+                manifest_entry.threshold_max_rate,
+                manifest_entry.reason_summary[:65535],
+            ),
+        )
+
+
 def record_failure(
     connection: PgConnection,
     spec: RawLoadSpec,
@@ -139,6 +246,14 @@ def record_failure(
         cursor.execute(
             """
             delete from audit.load_runs
+            where batch_id = %s
+              and entity_name = %s;
+            """,
+            (batch_id, spec.entity_name),
+        )
+        cursor.execute(
+            """
+            delete from audit.dead_letter_events
             where batch_id = %s
               and entity_name = %s;
             """,
@@ -180,6 +295,7 @@ def load_one_spec(
     batch_date: str,
     batch_id: str,
     run_id: str,
+    dead_letter_entry: DeadLetterManifestEntry | None,
 ) -> None:
     source_path = raw_file_path(raw_dir, spec.entity_name, batch_date, run_id, spec.file_name)
     started_at = utc_now()
@@ -197,6 +313,14 @@ def load_one_spec(
                 """,
                 (batch_id, spec.entity_name),
             )
+
+        record_dead_letter_event(
+            connection=connection,
+            spec=spec,
+            batch_id=batch_id,
+            run_id=run_id,
+            manifest_entry=dead_letter_entry,
+        )
 
         if not source_path.exists():
             raise FileNotFoundError(f"Missing prepared raw file: {source_path}")
@@ -218,9 +342,18 @@ def load_all(
     batch_date: str,
     batch_id: str,
     run_id: str,
+    dead_letter_entries: dict[str, DeadLetterManifestEntry],
 ) -> None:
     for spec in specs:
-        load_one_spec(connection, spec, raw_dir, batch_date, batch_id, run_id)
+        load_one_spec(
+            connection,
+            spec,
+            raw_dir,
+            batch_date,
+            batch_id,
+            run_id,
+            dead_letter_entries.get(spec.entity_name),
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -254,6 +387,7 @@ def main() -> None:
             batch_date=args.batch_date,
             batch_id=batch_id,
             run_id=args.run_id,
+            dead_letter_entries=load_dead_letter_manifest_entries(Path(args.raw_dir)),
         )
     finally:
         connection.close()

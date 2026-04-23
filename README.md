@@ -14,6 +14,7 @@ to be runnable without AWS access.
 ```text
 Olist CSV dataset
   -> Python ingestion
+  -> row-level validation + dead-letter files
   -> local raw zone shaped like S3 keys
   -> PostgreSQL raw tables via COPY FROM STDIN
   -> dbt staging models
@@ -27,6 +28,7 @@ The local raw zone mirrors the old S3 contract:
 
 ```text
 data/raw/olist/raw/<entity>/batch_date=<YYYY-MM-DD>/run_id=<run_id>/<entity>.csv.gz
+data/raw/olist/dead_letter/<entity>/batch_date=<YYYY-MM-DD>/run_id=<run_id>/<entity>.csv.gz
 ```
 
 This keeps the production conversation intact: in AWS, the same logical paths
@@ -36,6 +38,7 @@ can be backed by S3; locally, they are backed by the filesystem.
 
 - Reproducible local data warehouse workflow with Docker.
 - Raw landing-zone contract independent of a specific storage backend.
+- Dead Letter Pattern for record-level ingestion failures with threshold mode.
 - PostgreSQL warehouse loading with `COPY FROM STDIN`.
 - Airflow orchestration with retries, params, and task-level visibility.
 - dbt layered modeling: staging, intermediate, snapshots, core, marts.
@@ -108,6 +111,11 @@ python scripts\ingestion\prepare_olist_raw_files.py --batch-date 2018-09-01 --ba
 python scripts\ingestion\generate_correction_feeds.py --batch-date 2018-09-01 --batch-id 2018-09-01 --run-id manual_2018_09_01
 ```
 
+Both ingestion commands run row-level validation before warehouse load. Invalid
+records are written to the dead-letter zone and the run continues only while
+the rejected rows stay within the configured threshold
+(`--dead-letter-max-rows`, `--dead-letter-max-rate`).
+
 Load raw files into PostgreSQL:
 
 ```powershell
@@ -165,12 +173,16 @@ validate_source_contract
 - PostgreSQL 18 in Docker is the default local warehouse.
 - The raw zone is local filesystem storage, but keeps S3-style deterministic
   paths.
+- Record-level ingestion failures are isolated in the dead-letter zone; source
+  contract failures such as missing files or changed headers still fail fast.
 - S3/Redshift artifacts are retained as an alternate AWS design, not the active
   default path.
 - dbt targets PostgreSQL by default and keeps a Redshift profile target.
 - Small SQL dialect differences are isolated in dbt macros where practical.
 - Raw data includes stable logical `_batch_id`, `_loaded_at`,
   `_source_file`, and `_source_system`.
+- Dead-letter events are audited in `audit.dead_letter_events` alongside raw
+  load attempts in `audit.load_runs`.
 - Staging models are views; core dimensions, facts, and marts are tables.
 
 ## Current Status

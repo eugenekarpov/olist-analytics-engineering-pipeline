@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import gzip
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,15 +19,22 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.ingestion.correction_specs import CORRECTION_FEEDS, CUSTOMER_FEED, PRODUCT_FEED, FeedSpec
+from scripts.ingestion.correction_specs import (
+    CORRECTION_FEEDS,
+    CUSTOMER_FEED,
+    PRODUCT_FEED,
+    FeedSpec,
+)
 from scripts.ingestion.local_storage import render_manifest
+from scripts.ingestion.record_validation import (
+    DeadLetterThreshold,
+    assert_dead_letter_thresholds,
+)
 from scripts.ingestion.raw_files import (
-    METADATA_COLUMNS,
     PreparedFile,
     clean_entity_run_dirs,
-    raw_file_path,
-    raw_relative_path,
     utc_now_string,
+    write_validated_rows,
 )
 from scripts.ingestion.s3_storage import upload_files_to_s3
 
@@ -142,32 +148,20 @@ def write_feed(
     run_id: str,
     loaded_at: str,
 ) -> PreparedFile:
-    output_path = raw_file_path(
-        output_dir,
-        feed.entity_name,
-        batch_date,
-        run_id,
-        feed.file_name,
-    )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with gzip.open(output_path, mode="wt", encoding="utf-8", newline="") as output_file:
-        writer = csv.DictWriter(output_file, fieldnames=[*feed.headers, *METADATA_COLUMNS])
-        writer.writeheader()
-        for row in rows:
-            row = dict(row)
-            row["_batch_id"] = batch_id
-            row["_loaded_at"] = loaded_at
-            row["_source_file"] = feed.file_name
-            row["_source_system"] = SOURCE_SYSTEM
-            writer.writerow(row)
-
-    return PreparedFile(
+    return write_validated_rows(
+        rows=enumerate(rows, start=2),
+        output_dir=output_dir,
         entity_name=feed.entity_name,
         file_name=feed.file_name,
-        local_path=output_path,
-        relative_path=raw_relative_path(feed.entity_name, batch_date, run_id, feed.file_name),
-        row_count=len(rows),
+        columns=feed.headers,
+        column_types=feed.column_types,
+        batch_date=batch_date,
+        batch_id=batch_id,
+        run_id=run_id,
+        loaded_at=loaded_at,
+        source_file=feed.file_name,
+        source_system=SOURCE_SYSTEM,
+        dead_letter_stage="correction_feed_generation",
     )
 
 
@@ -181,6 +175,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--s3-prefix", default="olist")
     parser.add_argument("--upload", action="store_true")
     parser.add_argument("--batch-id")
+    parser.add_argument("--dead-letter-max-rows", type=int, default=10)
+    parser.add_argument("--dead-letter-max-rate", type=float, default=0.001)
     parser.add_argument("--customer-count", type=int, default=20)
     parser.add_argument("--product-count", type=int, default=20)
     parser.add_argument("--no-clean", action="store_true")
@@ -196,6 +192,10 @@ def main() -> None:
         raise ValueError("--s3-bucket is required when --upload is set")
 
     batch_id = args.batch_id or (args.run_id if args.upload else args.batch_date)
+    dead_letter_threshold = DeadLetterThreshold(
+        max_rows=args.dead_letter_max_rows,
+        max_rate=args.dead_letter_max_rate,
+    )
 
     if not args.no_clean:
         clean_entity_run_dirs(
@@ -242,14 +242,18 @@ def main() -> None:
         storage="s3" if args.upload else "local",
         s3_bucket=args.s3_bucket,
         s3_prefix=args.s3_prefix,
+        dead_letter_threshold=dead_letter_threshold,
     )
     print(f"Wrote {manifest_path}")
 
     for prepared_feed in prepared_feeds:
         print(
-            f"Wrote {prepared_feed.row_count} {prepared_feed.entity_name} rows "
+            f"Wrote {prepared_feed.row_count} valid {prepared_feed.entity_name} rows "
+            f"and {prepared_feed.dead_letter_row_count} dead-letter rows "
             f"-> {prepared_feed.local_path}"
         )
+
+    assert_dead_letter_thresholds(prepared_feeds, dead_letter_threshold)
 
     if args.upload:
         upload_files_to_s3(args.s3_bucket, args.s3_prefix, prepared_feeds)

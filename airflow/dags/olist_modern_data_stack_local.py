@@ -47,6 +47,8 @@ with DAG(
         "batch_date": "2018-09-01",
         "lookback_days": 3,
         "full_refresh": False,
+        "dead_letter_max_rows": 10,
+        "dead_letter_max_rate": 0.001,
     },
 ) as dag:
     start = EmptyOperator(task_id="start")
@@ -71,7 +73,9 @@ with DAG(
             f"--output-dir {LOCAL_RAW_DIR} "
             "--batch-date '{{ params.batch_date }}' "
             f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}'"
+            f"--run-id '{LOCAL_RUN_ID}' "
+            "--dead-letter-max-rows '{{ params.dead_letter_max_rows }}' "
+            "--dead-letter-max-rate '{{ params.dead_letter_max_rate }}'"
         ),
     )
 
@@ -84,7 +88,9 @@ with DAG(
             f"--output-dir {LOCAL_RAW_DIR} "
             "--batch-date '{{ params.batch_date }}' "
             f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}'"
+            f"--run-id '{LOCAL_RUN_ID}' "
+            "--dead-letter-max-rows '{{ params.dead_letter_max_rows }}' "
+            "--dead-letter-max-rate '{{ params.dead_letter_max_rate }}'"
         ),
     )
 

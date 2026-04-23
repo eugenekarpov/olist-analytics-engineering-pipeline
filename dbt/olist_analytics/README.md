@@ -34,6 +34,7 @@ dbt run --select staging intermediate --vars '{batch_date: "2018-09-01"}'
 dbt snapshot --vars '{batch_date: "2018-09-01"}'
 dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
 dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'
+dbt compile --select dead_letter_events
 ```
 
 The project includes a schema naming macro that maps dbt custom schemas directly
@@ -41,6 +42,9 @@ to warehouse schemas such as `staging`, `intermediate`, `core`, and `marts`.
 
 Small Postgres/Redshift SQL differences are isolated in compatibility macros
 under `macros/warehouse_compat.sql`.
+
+The `analyses/dead_letter_events.sql` query is a lightweight dbt entry point for
+reviewing rejected raw records recorded by ingestion.
 
 ## Data Quality Tests
 
