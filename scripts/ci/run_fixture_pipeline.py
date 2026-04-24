@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lookback-days", type=int, default=3)
     parser.add_argument("--dead-letter-max-rows", type=int, default=0)
     parser.add_argument("--dead-letter-max-rate", type=float, default=0)
+    parser.add_argument("--dbt-threads", type=int, default=1)
     parser.add_argument("--dbt-bin")
     parser.add_argument("--skip-dbt", action="store_true")
     parser.add_argument("--reset-warehouse", action="store_true")
@@ -259,9 +260,34 @@ def run_pipeline(args: argparse.Namespace, env: dict[str, str]) -> None:
     if args.skip_dbt:
         return
 
-    run([dbt, "run", "--select", "staging", "intermediate", "--vars", snapshot_vars], cwd=DBT_PROJECT_DIR, env=env)
+    run(
+        [
+            dbt,
+            "run",
+            "--select",
+            "staging",
+            "intermediate",
+            "--threads",
+            str(args.dbt_threads),
+            "--vars",
+            snapshot_vars,
+        ],
+        cwd=DBT_PROJECT_DIR,
+        env=env,
+    )
     mark_batch("DBT_SNAPSHOT_INPUTS_BUILT", args, env)
-    run([dbt, "snapshot", "--vars", snapshot_vars], cwd=DBT_PROJECT_DIR, env=env)
+    run(
+        [
+            dbt,
+            "snapshot",
+            "--threads",
+            str(args.dbt_threads),
+            "--vars",
+            snapshot_vars,
+        ],
+        cwd=DBT_PROJECT_DIR,
+        env=env,
+    )
     mark_batch("DBT_SNAPSHOTTED", args, env)
     run(
         [
@@ -270,6 +296,8 @@ def run_pipeline(args: argparse.Namespace, env: dict[str, str]) -> None:
             "--exclude",
             "resource_type:snapshot",
             "--full-refresh",
+            "--threads",
+            str(args.dbt_threads),
             "--vars",
             dbt_vars,
         ],
@@ -277,7 +305,11 @@ def run_pipeline(args: argparse.Namespace, env: dict[str, str]) -> None:
         env=env,
     )
     mark_batch("DBT_BUILT", args, env)
-    run([dbt, "test", "--vars", dbt_vars], cwd=DBT_PROJECT_DIR, env=env)
+    run(
+        [dbt, "test", "--threads", str(args.dbt_threads), "--vars", dbt_vars],
+        cwd=DBT_PROJECT_DIR,
+        env=env,
+    )
     mark_batch("TESTED", args, env)
 
 
