@@ -41,6 +41,7 @@ can be backed by S3; locally, they are backed by the filesystem.
 - Batch control state machine persisted in the warehouse audit schema.
 - Reconciliation of source, prepared, dead-letter, replay, and raw load counts.
 - Dead Letter Pattern for record-level ingestion failures with threshold mode.
+- Small fixture dataset and GitHub Actions quality gates for CI confidence.
 - PostgreSQL warehouse loading with `COPY FROM STDIN`.
 - Airflow orchestration with retries, params, and task-level visibility.
 - dbt layered modeling: staging, intermediate, snapshots, core, marts.
@@ -61,6 +62,7 @@ dbt/
 
 docs/
   architecture.md       End-to-end architecture and operational design.
+  ci.md                 GitHub Actions checks and fixture pipeline strategy.
   data_model.md         Dimensional model, grains, SCD2 strategy, marts.
   diagrams.md           Mermaid architecture and data model diagrams.
   runbook.md            Local run instructions.
@@ -111,6 +113,16 @@ Run fast Python tests for ingestion, dead-letter, and replay logic:
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+Run the small fixture pipeline used by CI:
+
+```powershell
+docker compose up -d postgres
+.\.venv\Scripts\python.exe scripts\ci\run_fixture_pipeline.py --reset-warehouse
+```
+
+`--reset-warehouse` drops and recreates the local analytical schemas, so use it
+for CI-style validation runs rather than ad hoc exploration.
 
 Prepare local raw files:
 
@@ -206,6 +218,8 @@ validate_source_contract
   state.
 - Raw load control totals are tracked in `audit.batch_reconciliation` and fail
   the DAG before dbt if counts drift.
+- CI uses a committed small fixture for fast pull request checks and keeps the
+  full `olist.zip` path as a local/manual validation path.
 - Staging models are views; core dimensions, facts, and marts are tables.
 
 ## Current Status
@@ -217,6 +231,7 @@ Redshift access is available again.
 Useful docs:
 
 - [Architecture](docs/architecture.md)
+- [CI Quality Gates](docs/ci.md)
 - [Data Model](docs/data_model.md)
 - [Diagrams](docs/diagrams.md)
 - [Runbook](docs/runbook.md)

@@ -56,6 +56,18 @@ Run fast Python tests:
 python -m unittest discover -s tests -v
 ```
 
+Run the small fixture integration path used by CI:
+
+```powershell
+docker compose up -d postgres
+.\.venv\Scripts\python.exe scripts\ci\run_fixture_pipeline.py --reset-warehouse
+```
+
+This validates source contract checks, raw preparation, correction feeds,
+PostgreSQL load, reconciliation, dbt snapshots/build/tests, and the batch
+control state machine. `--reset-warehouse` drops and recreates the local
+analytical schemas, so use it for CI-style validation runs.
+
 Prepare raw files in the local raw zone:
 
 ```powershell

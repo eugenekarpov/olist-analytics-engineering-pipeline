@@ -30,6 +30,7 @@ and quality gates.
 - Multi-grain modeling through order-level payment allocation to item-grain
   facts.
 - Data quality gates across sources, staging, core, and marts.
+- Small fixture CI with both happy-path and targeted failure-mode checks.
 - Trade-off discussion between local reproducibility and cloud-native services.
 
 ## Architecture Talking Points
@@ -91,6 +92,13 @@ raw loaded rows = prepared valid rows + successful replay rows
 
 The point is to catch silent data loss or accidental duplicates, not just hard
 SQL failures.
+
+CI uses a committed small fixture instead of the full Kaggle archive. The PR
+workflow runs fast Python checks, dbt parsing, Airflow DAG imports, and a
+PostgreSQL-backed fixture integration path. It also includes targeted negative
+tests for schema drift, dead-letter threshold breaches, and reconciliation
+failures. The interview story is: "I keep the CI dataset small, but I still
+exercise the same contracts and quality gates that the full pipeline uses."
 
 ## Dead Letter Pattern Talking Points
 
@@ -218,7 +226,7 @@ the preserved AWS DAG. The main branch prioritizes reproducibility.
 
 - Add MinIO if a local S3-compatible object store becomes useful.
 - Add Metabase dashboards.
-- Add CI for dbt parse/build checks.
+- Add nightly/manual full-dataset CI if a hosted dataset location is added.
 - Store prepared raw files as Parquet.
 - Add Terraform for the AWS path.
 - Re-enable Redshift as an alternate deployment target when access is available.
