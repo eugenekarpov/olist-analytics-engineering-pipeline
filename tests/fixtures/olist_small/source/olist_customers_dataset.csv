@@ -1,0 +1,9 @@
+customer_id,customer_unique_id,customer_zip_code_prefix,customer_city,customer_state
+customer_001,unique_001,01001,rio de janeiro,RJ
+customer_002,unique_002,01002,curitiba,PR
+customer_003,unique_003,01003,salvador,BA
+customer_004,unique_004,01004,sao paulo,SP
+customer_005,unique_005,01005,rio de janeiro,RJ
+customer_006,unique_006,01006,curitiba,PR
+customer_007,unique_001,01007,salvador,BA
+customer_008,unique_002,01008,sao paulo,SP

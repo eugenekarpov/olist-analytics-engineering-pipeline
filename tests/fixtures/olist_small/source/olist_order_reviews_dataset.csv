@@ -1,0 +1,13 @@
+review_id,order_id,review_score,review_comment_title,review_comment_message,review_creation_date,review_answer_timestamp
+review_001,order_001,2,ok,fixture review,2018-01-10 00:00:00,2018-01-10 12:00:00
+review_002,order_002,3,ok,fixture review,2018-02-12 00:00:00,2018-02-12 12:00:00
+review_003,order_003,4,ok,fixture review,2018-03-11 00:00:00,2018-03-11 12:00:00
+review_004,order_004,5,ok,fixture review,2018-04-13 00:00:00,2018-04-13 12:00:00
+review_005,order_005,1,ok,fixture review,2018-05-15 00:00:00,2018-05-15 12:00:00
+review_006,order_006,2,ok,fixture review,2018-06-14 00:00:00,2018-06-14 12:00:00
+review_007,order_007,3,ok,fixture review,2018-01-16 00:00:00,2018-01-16 12:00:00
+review_008,order_008,4,ok,fixture review,2018-02-18 00:00:00,2018-02-18 12:00:00
+review_009,order_009,5,ok,fixture review,2018-03-17 00:00:00,2018-03-17 12:00:00
+review_010,order_010,1,ok,fixture review,2018-04-19 00:00:00,2018-04-19 12:00:00
+review_011,order_011,2,ok,fixture review,2018-05-21 00:00:00,2018-05-21 12:00:00
+review_012,order_012,3,ok,fixture review,2018-06-20 00:00:00,2018-06-20 12:00:00

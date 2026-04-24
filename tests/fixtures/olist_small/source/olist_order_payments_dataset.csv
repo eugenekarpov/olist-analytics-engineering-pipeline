@@ -1,0 +1,15 @@
+order_id,payment_sequential,payment_type,payment_installments,payment_value
+order_001,1,boleto,2,31.00
+order_002,1,voucher,3,34.00
+order_003,1,debit_card,1,77.00
+order_004,1,voucher,1,10.00
+order_004,2,credit_card,2,30.00
+order_005,1,boleto,3,43.00
+order_006,1,voucher,1,95.00
+order_007,1,debit_card,2,49.00
+order_008,1,voucher,1,10.00
+order_008,2,credit_card,2,42.00
+order_009,1,boleto,1,113.00
+order_010,1,voucher,2,58.00
+order_011,1,debit_card,3,61.00
+order_012,1,credit_card,1,131.00

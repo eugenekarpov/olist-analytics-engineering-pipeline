@@ -1,0 +1,273 @@
+[
+  {
+    "file_name": "olist_customers_dataset.csv",
+    "entity_name": "customers",
+    "row_count": 8,
+    "columns": [
+      {
+        "name": "customer_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "customer_unique_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "customer_zip_code_prefix",
+        "redshift_raw_type": "varchar(16)"
+      },
+      {
+        "name": "customer_city",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "customer_state",
+        "redshift_raw_type": "varchar(256)"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_geolocation_dataset.csv",
+    "entity_name": "geolocation",
+    "row_count": 6,
+    "columns": [
+      {
+        "name": "geolocation_zip_code_prefix",
+        "redshift_raw_type": "varchar(16)"
+      },
+      {
+        "name": "geolocation_lat",
+        "redshift_raw_type": "decimal(18, 14)"
+      },
+      {
+        "name": "geolocation_lng",
+        "redshift_raw_type": "decimal(18, 14)"
+      },
+      {
+        "name": "geolocation_city",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "geolocation_state",
+        "redshift_raw_type": "varchar(256)"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_order_items_dataset.csv",
+    "entity_name": "order_items",
+    "row_count": 16,
+    "columns": [
+      {
+        "name": "order_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "order_item_id",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "seller_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "shipping_limit_date",
+        "redshift_raw_type": "timestamp"
+      },
+      {
+        "name": "price",
+        "redshift_raw_type": "decimal(18, 2)"
+      },
+      {
+        "name": "freight_value",
+        "redshift_raw_type": "decimal(18, 2)"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_order_payments_dataset.csv",
+    "entity_name": "order_payments",
+    "row_count": 14,
+    "columns": [
+      {
+        "name": "order_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "payment_sequential",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "payment_type",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "payment_installments",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "payment_value",
+        "redshift_raw_type": "decimal(18, 2)"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_order_reviews_dataset.csv",
+    "entity_name": "order_reviews",
+    "row_count": 12,
+    "columns": [
+      {
+        "name": "review_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "order_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "review_score",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "review_comment_title",
+        "redshift_raw_type": "varchar(1024)"
+      },
+      {
+        "name": "review_comment_message",
+        "redshift_raw_type": "varchar(65535)"
+      },
+      {
+        "name": "review_creation_date",
+        "redshift_raw_type": "timestamp"
+      },
+      {
+        "name": "review_answer_timestamp",
+        "redshift_raw_type": "timestamp"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_orders_dataset.csv",
+    "entity_name": "orders",
+    "row_count": 12,
+    "columns": [
+      {
+        "name": "order_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "customer_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "order_status",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "order_purchase_timestamp",
+        "redshift_raw_type": "timestamp"
+      },
+      {
+        "name": "order_approved_at",
+        "redshift_raw_type": "timestamp"
+      },
+      {
+        "name": "order_delivered_carrier_date",
+        "redshift_raw_type": "timestamp"
+      },
+      {
+        "name": "order_delivered_customer_date",
+        "redshift_raw_type": "timestamp"
+      },
+      {
+        "name": "order_estimated_delivery_date",
+        "redshift_raw_type": "timestamp"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_products_dataset.csv",
+    "entity_name": "products",
+    "row_count": 8,
+    "columns": [
+      {
+        "name": "product_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "product_category_name",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "product_name_lenght",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_description_lenght",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_photos_qty",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_weight_g",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_length_cm",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_height_cm",
+        "redshift_raw_type": "integer"
+      },
+      {
+        "name": "product_width_cm",
+        "redshift_raw_type": "integer"
+      }
+    ]
+  },
+  {
+    "file_name": "olist_sellers_dataset.csv",
+    "entity_name": "sellers",
+    "row_count": 4,
+    "columns": [
+      {
+        "name": "seller_id",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "seller_zip_code_prefix",
+        "redshift_raw_type": "varchar(16)"
+      },
+      {
+        "name": "seller_city",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "seller_state",
+        "redshift_raw_type": "varchar(256)"
+      }
+    ]
+  },
+  {
+    "file_name": "product_category_name_translation.csv",
+    "entity_name": "product_category_translation",
+    "row_count": 5,
+    "columns": [
+      {
+        "name": "product_category_name",
+        "redshift_raw_type": "varchar(256)"
+      },
+      {
+        "name": "product_category_name_english",
+        "redshift_raw_type": "varchar(256)"
+      }
+    ]
+  }
+]
