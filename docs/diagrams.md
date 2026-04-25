@@ -217,8 +217,8 @@ sequenceDiagram
     Airflow->>Generator: Generate corrections visible as of batch_date
     Generator->>RawZone: Write customer/product correction feeds
     Airflow->>Postgres: COPY raw correction tables
-    Airflow->>dbt: dbt snapshot --vars batch_date
+    Airflow->>dbt: Run snapshot step for batch_date
     dbt->>Postgres: Read current attributes as of batch_date
     dbt->>Postgres: Insert new snapshot versions when tracked attributes change
-    Airflow->>dbt: dbt build core/marts
+    Airflow->>dbt: Build core models and marts
 ```

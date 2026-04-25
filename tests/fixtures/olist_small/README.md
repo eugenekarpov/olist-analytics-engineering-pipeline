@@ -7,12 +7,8 @@ This fixture is a tiny, synthetic Olist-shaped dataset for CI.
 - `source_profile_small.json` is the matching source contract.
 - `source/` contains the uncompressed CSVs so fixture changes are reviewable.
 
-The fixture is intentionally committed to the repository because it is small
-and lets CI run the real ingestion, raw load, reconciliation, and dbt path
-without downloading the full dataset.
+The fixture is intentionally committed because it is small and lets CI run the
+real ingestion, raw load, reconciliation, and dbt path without downloading the
+full dataset.
 
-Regenerate it with:
-
-```powershell
-.\.venv\Scripts\python.exe scripts\testing\create_small_fixture_dataset.py
-```
+Use the OS-specific runbook if the fixture needs to be regenerated locally.

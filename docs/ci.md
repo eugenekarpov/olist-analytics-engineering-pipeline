@@ -1,29 +1,28 @@
 # CI Quality Gates
 
-The GitHub Actions workflow is intentionally split into small jobs. Each job
-guards a different failure class, so a failing check points to a useful layer
-instead of becoming one large opaque pipeline failure.
+The GitHub Actions workflow is split into focused jobs so a failing check points
+to a useful layer instead of one opaque pipeline failure.
 
 ## Workflow
 
 ```text
 lint
-  -> Ruff linting, Ruff formatting, SQLFluff dbt linting against a lightweight
-     PostgreSQL service, and the same pre-commit hooks developers run locally.
+  -> Ruff, SQLFluff, and pre-commit checks.
 
 python-unit
-  -> Python syntax, source contract fixture validation, unit tests,
+  -> Python syntax, source-contract fixture validation, unit tests,
      and targeted negative data-quality tests.
 
 dbt-static
   -> dbt parse without a warehouse connection.
 
 airflow-imports
-  -> docker compose config, Airflow image build, PostgreSQL 17.9 metadata
-     service startup, and isolated DagBag imports.
+  -> Docker Compose validation, Airflow image build, metadata database startup,
+     and isolated DAG imports.
 
 fixture-integration
-  -> PostgreSQL 18.3 service container and the small fixture end-to-end path.
+  -> Small fixture end-to-end path through PostgreSQL, reconciliation, dbt
+     snapshots/build/tests, and batch-control checks.
 ```
 
 ## Small Fixture Dataset
@@ -36,61 +35,11 @@ It contains:
 - `source_profile_small.json`, the matching source contract.
 - `source/`, reviewable uncompressed CSVs.
 
-The fixture is synthetic, small, and referentially consistent. It is designed
-to exercise real joins, correction feed generation, reconciliation, dbt
-snapshots, core models, marts, and tests without downloading the full Kaggle
-archive in CI.
-
-Regenerate it when needed:
-
-```powershell
-uv run python scripts\testing\create_small_fixture_dataset.py
-```
-
-## Local CI Commands
-
-Fast checks:
-
-```powershell
-uv run ruff check airflow\dags scripts tests
-uv run ruff format --check airflow\dags scripts tests
-Copy-Item -Force dbt\olist_analytics\profiles.yml.example dbt\olist_analytics\profiles.yml
-uv run sqlfluff lint dbt\olist_analytics\models dbt\olist_analytics\snapshots dbt\olist_analytics\tests dbt\olist_analytics\analyses dbt\olist_analytics\macros
-uv run pre-commit run --all-files
-uv run python -m compileall airflow\dags scripts tests
-uv run python scripts\utilities\validate_source_contract.py `
-  --archive tests\fixtures\olist_small\olist_small.zip `
-  --profile tests\fixtures\olist_small\source_profile_small.json
-uv run python -m unittest discover -s tests -v
-```
-
-dbt static parse:
-
-```powershell
-cd dbt\olist_analytics
-uv run dbt parse --no-partial-parse --show-all-deprecations
-```
-
-SQLFluff uses the dbt templater and the local PostgreSQL dbt profile. If
-`profiles.yml` is missing locally, copy it from `profiles.yml.example` before
-running SQLFluff or pre-commit. The CI lint job starts PostgreSQL because dbt
-can open a warehouse connection while compiling incremental models for
-SQLFluff.
-
-Small fixture integration:
-
-```powershell
-docker compose up -d postgres
-uv run python scripts\ci\run_fixture_pipeline.py --reset-warehouse
-```
-
-`--reset-warehouse` drops and recreates the local analytical schemas
-(`raw`, `audit`, `staging`, `intermediate`, `snapshots`, `core`, `marts`). Use
-it for CI-style runs, not when you want to preserve exploratory local tables.
+The fixture is synthetic, small, and referentially consistent. It exercises real
+joins, correction feed generation, reconciliation, dbt snapshots, core models,
+marts, and tests without requiring the full Kaggle archive in CI.
 
 ## What CI Tests
-
-The PR-level workflow checks the main happy path and selected failure modes.
 
 Happy path:
 
@@ -100,7 +49,7 @@ Happy path:
 - PostgreSQL raw load;
 - batch control state transitions;
 - source-to-raw reconciliation;
-- dbt staging/intermediate build;
+- dbt staging and intermediate build;
 - dbt snapshots;
 - dbt core and mart build;
 - dbt tests.
@@ -112,5 +61,6 @@ Failure modes:
 - dead-letter threshold failure;
 - reconciliation gate failure.
 
-The full `olist.zip` run remains a local/manual validation path. CI favors a
-small, deterministic confidence gate so pull requests stay fast and reliable.
+The full `olist.zip` run remains a local/manual validation path. Use the
+[Windows runbook](runbook_windows.md) or [macOS runbook](runbook_macos.md) for
+the concrete local commands.

@@ -2,49 +2,20 @@
 
 ## Modeling Goals
 
-The core model should demonstrate dimensional modeling, star schema design,
-grain awareness, SCD Type 2 dimensions, incremental facts, and business-facing
-marts.
+The dbt project demonstrates dimensional modeling, grain discipline, SCD Type 2
+history, incremental fact loading, and business-facing marts.
 
 ## Source Entities
 
-Expected Olist files:
+The Olist source contract covers customers, geolocation, order items, payments,
+reviews, orders, products, sellers, and product category translation.
 
-- customers
-- geolocation
-- order_items
-- order_payments
-- order_reviews
-- orders
-- products
-- sellers
-- product_category_name_translation
+Detailed file names, row counts, columns, and raw warehouse types live in
+[source_contract.md](source_contract.md).
 
-## Warehouse Layers
+## Core Model
 
-```text
-raw
-  raw source tables loaded from the local raw zone or S3-compatible path
-
-staging
-  typed, cleaned views over raw tables
-
-intermediate
-  reusable transformation logic
-
-snapshots
-  dbt-managed SCD2 records
-
-core
-  dimensional model
-
-marts
-  business aggregates
-```
-
-## Grain Decisions
-
-### fact_order_items
+### `fact_order_items`
 
 Grain:
 
@@ -52,311 +23,95 @@ Grain:
 one row per order_id + order_item_id
 ```
 
-Why this grain:
+This grain keeps product, seller, price, freight, and delivery metrics at the
+natural order-item level. Order-level payment values are allocated to items in
+proportion to item gross amount.
 
-- Olist order items naturally identify products and sellers.
-- Product revenue and freight values are available at item level.
-- Payments are at order level, so payment allocation can demonstrate careful
-  multi-grain modeling.
+Key measures include price, freight, gross item amount, allocated payment value,
+delivery days, delivery delay days, and late-delivery flags.
 
-Candidate measures:
+### `dim_customer_scd2`
 
-- `price`
-- `freight_value`
-- `gross_item_amount`
-- `allocated_payment_value`
-- `delivery_days`
-- `delivery_delay_days`
-- `is_delivered_late`
+Business key: `customer_unique_id`.
 
-Candidate degenerate dimensions:
+Tracked attributes: zip prefix, city, and state. The dimension demonstrates how
+customer profile or address changes affect historical facts.
 
-- `order_id`
-- `order_item_id`
+### `dim_product_scd2`
 
-## Core Dimensions
+Business key: `product_id`.
 
-### dim_customer_scd2
+Tracked attributes include category, English category name, weight, and physical
+dimensions. The dimension demonstrates category and product-attribute
+corrections over time.
 
-Business key:
+### `dim_seller`
 
-```text
-customer_unique_id
-```
+Business key: `seller_id`.
 
-SCD2 attributes:
+This is a Type 1 dimension, which keeps the project focused while still giving a
+contrast with the SCD2 customer and product dimensions.
 
-- `customer_zip_code_prefix`
-- `customer_city`
-- `customer_state`
+### `dim_date`
 
-Use case:
+Business key: `date_day`.
 
-Customer profile and address changes over time.
+Used for purchase, approval, delivery, and estimated delivery dates.
 
-### dim_product_scd2
+### `dim_order_status`
 
-Business key:
-
-```text
-product_id
-```
-
-SCD2 attributes:
-
-- `product_category_name`
-- `product_category_name_english`
-- `product_weight_g`
-- `product_length_cm`
-- `product_height_cm`
-- `product_width_cm`
-
-Use case:
-
-Product attribute corrections and category reclassification over time.
-
-### dim_seller
-
-Business key:
-
-```text
-seller_id
-```
-
-Initial type:
-
-```text
-Type 1 table
-```
-
-Reason:
-
-It gives the project a useful contrast between Type 1 and Type 2 dimensions.
-Seller SCD2 can be added later if needed.
-
-### dim_date
-
-Business key:
-
-```text
-date_day
-```
-
-Used for:
-
-- Purchase date.
-- Approval date.
-- Delivered date.
-- Estimated delivery date.
-
-### dim_order_status
-
-Small reference dimension based on order status values.
-
-Expected statuses include:
-
-- `created`
-- `approved`
-- `invoiced`
-- `processing`
-- `shipped`
-- `delivered`
-- `unavailable`
-- `canceled`
+Small reference dimension for Olist order status values such as `created`,
+`approved`, `shipped`, `delivered`, `unavailable`, and `canceled`.
 
 ## SCD2 Strategy
 
-Olist is a static dataset, so real source updates are not naturally visible
-across ingestion runs. To demonstrate SCD2 in a production-like way, the project
-will add controlled correction feeds.
-
-Correction feeds:
+Olist is a static dataset, so the project generates deterministic correction
+feeds to make Type 2 behavior visible across batch dates:
 
 ```text
 customer_profile_changes
 product_attribute_changes
 ```
 
-These feeds simulate master-data updates such as:
+dbt snapshots use the `check` strategy. Core SCD2 dimensions expose business
+effective windows as `valid_from`, `valid_to`, and `is_current`, while retaining
+dbt snapshot timestamps separately for processing-time lineage.
 
-- Customer address/profile updates.
-- Product category corrections.
-- Product size or weight corrections.
+Facts join to SCD2 dimensions by the business event timestamp, so historical
+orders resolve to the customer and product attributes that were valid at the
+time of purchase.
 
-The important principle is that source entities can appear more than once across
-batches with the same business key and changed tracked attributes.
+## Incremental Fact Loading
 
-## dbt Snapshots
+`fact_order_items` is incremental. Each run reprocesses the widest needed
+window across:
 
-Snapshots will use the `check` strategy.
+- the configured late-arriving lookback;
+- the earliest visible customer correction;
+- the earliest visible product correction.
 
-Customer snapshot:
-
-```text
-unique_key: customer_unique_id
-check_cols:
-  - customer_zip_code_prefix
-  - customer_city
-  - customer_state
-```
-
-Product snapshot:
-
-```text
-unique_key: product_id
-check_cols:
-  - product_category_name
-  - product_category_name_english
-  - product_weight_g
-  - product_length_cm
-  - product_height_cm
-  - product_width_cm
-```
-
-Snapshot outputs are transformed into core dimensions with clean column names:
-
-```text
-valid_from
-valid_to
-is_current
-```
-
-The core dimensions also add a baseline row from the original source attributes
-with `valid_from = 1900-01-01`. This keeps historical facts joinable even when a
-demo run is started at a final `batch_date` where correction feeds are already
-visible.
-
-For fact joins, `valid_from` and `valid_to` represent business-effective
-windows. dbt snapshot metadata columns are retained separately as
-`snapshot_valid_from` and `snapshot_valid_to`, because dbt snapshot timestamps
-represent processing time rather than the business event time used by facts.
-
-## Fact To SCD2 Joins
-
-The fact table should join to SCD2 dimensions using the event timestamp.
-
-Example:
-
-```sql
-orders.order_purchase_timestamp >= customer.valid_from
-and orders.order_purchase_timestamp < coalesce(customer.valid_to, '9999-12-31')
-```
-
-This allows historical facts to be analyzed with the dimension attributes that
-were valid when the business event happened.
-
-## Payment Allocation
-
-Olist payments are at order grain, while `fact_order_items` is at order item
-grain.
-
-The project will allocate order-level payment value to order items
-proportionally:
-
-```text
-item_gross_amount = price + freight_value
-allocated_payment_value =
-  order_payment_value * item_gross_amount / order_gross_amount
-```
-
-This demonstrates careful handling of different source grains.
-
-## Incremental Reprocessing Window
-
-`fact_order_items` is incremental, but the reprocessing window is intentionally
-slightly wider than a simple "last N days" filter. Each run reprocesses from the
-earliest of:
-
-- the configured late-arriving lookback boundary;
-- the earliest visible customer correction effective timestamp;
-- the earliest visible product correction effective timestamp.
-
-This keeps fact-to-SCD2 surrogate keys consistent when a dimension correction is
+This keeps fact-to-dimension surrogate keys correct when a correction is
 business-effective in the past.
-
-## Materializations
-
-Recommended first version:
-
-```text
-staging: views
-intermediate: views or ephemeral models
-snapshots: dbt snapshot tables
-dimensions: tables
-fact_order_items: incremental table
-marts: tables
-```
-
-Rationale:
-
-- Staging views stay lightweight and transparent.
-- Dimensions are small and cheap to rebuild.
-- The main fact is the best place to demonstrate incremental processing.
-- Marts are small aggregates, so table rebuilds are simple and reliable.
 
 ## Marts
 
-### mart_daily_revenue
+### `mart_daily_revenue`
 
-Grain:
+Grain: one row per purchase date.
 
-```text
-one row per order_purchase_date
-```
+Metrics include gross revenue, product revenue, freight revenue, order count,
+customer count, item count, average order value, delivery days, and late
+deliveries.
 
-Metrics:
+### `mart_monthly_arpu`
 
-- `gross_revenue`
-- `product_revenue`
-- `freight_revenue`
-- `orders_count`
-- `customers_count`
-- `items_count`
-- `average_order_value`
-- `average_delivery_days`
-- `late_deliveries_count`
+Grain: one row per month.
 
-### mart_monthly_arpu
+Metrics include active customers, total revenue, ARPU, orders per customer,
+average order value, and repeat-customer rate.
 
-Grain:
+## Data Quality
 
-```text
-one row per month
-```
-
-Metrics:
-
-- `active_customers`
-- `total_revenue`
-- `arpu`
-- `orders_per_customer`
-- `average_order_value`
-- `repeat_customer_rate`
-
-## Testing Strategy
-
-### Source And Staging Tests
-
-- Primary keys are not null and unique where applicable.
-- Foreign keys have relationships to parent sources.
-- Status fields use accepted values.
-- Monetary fields are non-negative.
-- Timestamps parse successfully.
-
-### Core Tests
-
-- Dimension surrogate keys are unique and not null.
-- Fact natural key is unique and not null.
-- Fact foreign keys have relationships to dimensions.
-- Fact rows match the cleaned staging order-item grain.
-- SCD2 windows do not overlap per business key.
-- SCD2 windows have positive effective intervals.
-- Current SCD2 row count is at most one per business key.
-- Payment allocations balance back to order-level payments.
-
-### Mart Tests
-
-- Mart grain is unique.
-- Revenue and customer counts are non-negative.
-- ARPU equals total revenue divided by active customers.
-- Dates are within expected source date bounds.
+dbt tests cover source and staging keys, accepted values, non-negative monetary
+fields, fact grain, dimension relationships, SCD2 window validity, current-row
+uniqueness, payment allocation balance, and mart metric formulas.
