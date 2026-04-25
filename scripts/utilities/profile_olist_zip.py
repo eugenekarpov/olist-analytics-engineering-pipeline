@@ -34,7 +34,7 @@ TIMESTAMP_FORMATS = (
     "%Y-%m-%d",
 )
 
-REDSHIFT_TYPE_OVERRIDES = {
+WAREHOUSE_TYPE_OVERRIDES = {
     "customer_zip_code_prefix": "varchar(16)",
     "geolocation_zip_code_prefix": "varchar(16)",
     "seller_zip_code_prefix": "varchar(16)",
@@ -115,9 +115,9 @@ def infer_type(values: Iterable[str]) -> str:
     return "varchar"
 
 
-def redshift_type(column_name: str, inferred_type: str) -> str:
-    if column_name in REDSHIFT_TYPE_OVERRIDES:
-        return REDSHIFT_TYPE_OVERRIDES[column_name]
+def warehouse_raw_type(column_name: str, inferred_type: str) -> str:
+    if column_name in WAREHOUSE_TYPE_OVERRIDES:
+        return WAREHOUSE_TYPE_OVERRIDES[column_name]
 
     mapping = {
         "integer": "integer",
@@ -249,7 +249,7 @@ def render_contract(profiles: list[FileProfile], archive_path: Path) -> str:
             "## Entity Contracts",
             "",
             "The `Inferred type` column is based on sampled non-null values. The",
-            "`Redshift raw type` column is the recommended first-pass type for raw",
+            "`Warehouse raw type` column is the recommended first-pass type for raw",
             "DDL. Staging models can cast to stricter business types where needed.",
             "",
         ]
@@ -265,7 +265,7 @@ def render_contract(profiles: list[FileProfile], archive_path: Path) -> str:
                 [
                     f"`{column.name}`",
                     column.inferred_type,
-                    redshift_type(column.name, column.inferred_type),
+                    warehouse_raw_type(column.name, column.inferred_type),
                     str(column.null_count),
                     f"{null_pct:.2f}%",
                     ", ".join(f"`{value}`" for value in column.sample_values),
@@ -284,7 +284,7 @@ def render_contract(profiles: list[FileProfile], archive_path: Path) -> str:
                     [
                         "Column",
                         "Inferred type",
-                        "Redshift raw type",
+                        "Warehouse raw type",
                         "Nulls",
                         "Null %",
                         "Sample values",
@@ -309,7 +309,7 @@ def render_contract(profiles: list[FileProfile], archive_path: Path) -> str:
                     [
                         "`_source_file`",
                         "varchar(512)",
-                        "Original S3 object or source file.",
+                        "Original raw object or source file.",
                     ],
                     [
                         "`_source_system`",
@@ -347,7 +347,7 @@ def write_json_profile(profiles: list[FileProfile], output_path: Path) -> None:
                         "null_count": column.null_count,
                         "non_null_count": column.non_null_count,
                         "inferred_type": column.inferred_type,
-                        "redshift_raw_type": redshift_type(
+                        "redshift_raw_type": warehouse_raw_type(
                             column.name,
                             column.inferred_type,
                         ),
