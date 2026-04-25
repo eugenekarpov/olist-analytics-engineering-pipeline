@@ -6,8 +6,9 @@ This runbook uses shell commands from the repository root.
 
 - Docker Desktop or another Docker runtime with the Compose plugin is running.
 - `uv` is installed.
-- The full `olist.zip` archive is in the repository root for full local runs.
-- The committed small fixture is available for CI-style smoke runs.
+
+The repository includes the full `olist.zip` archive for local runs and the
+committed small fixture for CI-style smoke runs.
 
 ## One-Time Setup
 
