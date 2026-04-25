@@ -6,8 +6,8 @@ This runbook describes the local-first end-to-end run.
 
 - `olist.zip` exists in the repository root.
 - Docker Desktop is running.
-- Python virtual environment is created.
-- Python dependencies are installed.
+- uv is installed.
+- Python dependencies are synced from `uv.lock`.
 - dbt profile exists.
 
 AWS credentials and Redshift access are not required for the default run.
@@ -15,9 +15,8 @@ AWS credentials and Redshift access are not required for the default run.
 ## Local Setup
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+winget install --id astral-sh.uv -e
+uv sync --locked
 copy .env.example .env
 copy dbt\olist_analytics\profiles.yml.example dbt\olist_analytics\profiles.yml
 ```
@@ -47,20 +46,20 @@ The Compose volume for PostgreSQL 18 is mounted at `/var/lib/postgresql`, with
 Validate the archive:
 
 ```powershell
-python scripts\utilities\validate_source_contract.py
+uv run python scripts\utilities\validate_source_contract.py
 ```
 
 Run fast Python tests:
 
 ```powershell
-python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
 ```
 
 Run the small fixture integration path used by CI:
 
 ```powershell
 docker compose up -d postgres
-.\.venv\Scripts\python.exe scripts\ci\run_fixture_pipeline.py --reset-warehouse
+uv run python scripts\ci\run_fixture_pipeline.py --reset-warehouse
 ```
 
 This validates source contract checks, raw preparation, correction feeds,
@@ -71,7 +70,7 @@ analytical schemas, so use it for CI-style validation runs.
 Prepare raw files in the local raw zone:
 
 ```powershell
-python scripts\ingestion\prepare_olist_raw_files.py `
+uv run python scripts\ingestion\prepare_olist_raw_files.py `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
   --run-id manual_2018_09_01 `
@@ -82,7 +81,7 @@ python scripts\ingestion\prepare_olist_raw_files.py `
 Generate correction feeds:
 
 ```powershell
-python scripts\ingestion\generate_correction_feeds.py `
+uv run python scripts\ingestion\generate_correction_feeds.py `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
   --run-id manual_2018_09_01 `
@@ -102,7 +101,7 @@ failed run still leaves inspectable evidence.
 Bootstrap PostgreSQL schemas and load raw files:
 
 ```powershell
-python scripts\loading\load_raw_to_postgres.py `
+uv run python scripts\loading\load_raw_to_postgres.py `
   --bootstrap-sql-dir infra/postgres `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
@@ -121,12 +120,12 @@ $env:POSTGRES_DB = "olist_analytics"
 $env:POSTGRES_USER = "olist"
 $env:POSTGRES_PASSWORD = "olist"
 
-dbt debug
-dbt source freshness
-dbt run --select staging intermediate --vars '{batch_date: "2018-09-01"}'
-dbt snapshot --vars '{batch_date: "2018-09-01"}'
-dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
-dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'
+uv run dbt debug
+uv run dbt source freshness
+uv run dbt run --select staging intermediate --vars '{batch_date: "2018-09-01"}'
+uv run dbt snapshot --vars '{batch_date: "2018-09-01"}'
+uv run dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
+uv run dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'
 ```
 
 ## Airflow Run
@@ -202,7 +201,7 @@ docker compose exec -T postgres psql -U olist -d olist_analytics `
 Run reconciliation manually after raw load:
 
 ```powershell
-python scripts\quality\reconcile_batch.py `
+uv run python scripts\quality\reconcile_batch.py `
   --raw-dir data/raw/olist `
   --profile docs/source_profile.json `
   --bootstrap-sql-dir infra/postgres `
@@ -221,13 +220,13 @@ docker compose exec -T postgres psql -U olist -d olist_analytics `
 For manual runs, start or update a batch control record directly:
 
 ```powershell
-python scripts\orchestration\batch_control.py start `
+uv run python scripts\orchestration\batch_control.py start `
   --bootstrap-sql-dir infra/postgres `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
   --run-id manual_2018_09_01
 
-python scripts\orchestration\batch_control.py mark `
+uv run python scripts\orchestration\batch_control.py mark `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
   --run-id manual_2018_09_01 `
@@ -240,13 +239,13 @@ Create a demo archive with one corrupt `payment_value` while preserving the same
 source headers and row counts:
 
 ```powershell
-python scripts\utilities\create_dead_letter_demo_archive.py
+uv run python scripts\utilities\create_dead_letter_demo_archive.py
 ```
 
 Run ingestion against that archive:
 
 ```powershell
-python scripts\ingestion\prepare_olist_raw_files.py `
+uv run python scripts\ingestion\prepare_olist_raw_files.py `
   --archive data/demo/dead_letter/olist_dead_letter_demo.zip `
   --output-dir data/raw/olist_dead_letter_demo `
   --batch-date 2018-09-01 `
@@ -265,7 +264,7 @@ data/raw/olist_dead_letter_demo/dead_letter/order_payments/batch_date=2018-09-01
 After correcting the value in a dead-letter CSV, replay it into the raw table:
 
 ```powershell
-python scripts\loading\replay_dead_letters.py `
+uv run python scripts\loading\replay_dead_letters.py `
   --entity order_payments `
   --dead-letter-file data/raw/olist_dead_letter_demo/dead_letter/order_payments/batch_date=2018-09-01/run_id=dead_letter_demo/order_payments.csv.gz `
   --replay-id demo_payment_fix `

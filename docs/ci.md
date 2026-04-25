@@ -39,7 +39,7 @@ archive in CI.
 Regenerate it when needed:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\testing\create_small_fixture_dataset.py
+uv run python scripts\testing\create_small_fixture_dataset.py
 ```
 
 ## Local CI Commands
@@ -47,25 +47,25 @@ Regenerate it when needed:
 Fast checks:
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall airflow\dags scripts tests
-.\.venv\Scripts\python.exe scripts\utilities\validate_source_contract.py `
+uv run python -m compileall airflow\dags scripts tests
+uv run python scripts\utilities\validate_source_contract.py `
   --archive tests\fixtures\olist_small\olist_small.zip `
   --profile tests\fixtures\olist_small\source_profile_small.json
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
 ```
 
 dbt static parse:
 
 ```powershell
 cd dbt\olist_analytics
-..\..\.venv\Scripts\dbt.exe parse --no-partial-parse --show-all-deprecations
+uv run dbt parse --no-partial-parse --show-all-deprecations
 ```
 
 Small fixture integration:
 
 ```powershell
 docker compose up -d postgres
-.\.venv\Scripts\python.exe scripts\ci\run_fixture_pipeline.py --reset-warehouse
+uv run python scripts\ci\run_fixture_pipeline.py --reset-warehouse
 ```
 
 `--reset-warehouse` drops and recreates the local analytical schemas

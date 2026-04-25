@@ -82,21 +82,19 @@ scripts/
 
 ## Local Commands
 
-Create a Python environment and install project dependencies:
+Install uv, create the Python 3.11 environment, and install locked project
+dependencies:
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+winget install --id astral-sh.uv -e
+uv sync --locked
 ```
 
-Python dependencies are locked with `pip-tools`. Edit direct dependencies in
-`requirements.in`, then regenerate the pinned, hash-checked lock file with
-Python 3.11:
+Python dependencies are declared in `pyproject.toml` and locked in `uv.lock`.
+After editing dependencies, refresh the lock file with:
 
 ```powershell
-pip install pip-tools
-pip-compile --allow-unsafe --generate-hashes --strip-extras --output-file=requirements.txt requirements.in
+uv lock
 ```
 
 Start PostgreSQL 18 and Airflow:
@@ -114,20 +112,20 @@ and sets `PGDATA=/var/lib/postgresql/18/docker`.
 Validate the local archive:
 
 ```powershell
-python scripts\utilities\validate_source_contract.py
+uv run python scripts\utilities\validate_source_contract.py
 ```
 
 Run fast Python tests for ingestion, dead-letter, and replay logic:
 
 ```powershell
-python -m unittest discover -s tests -v
+uv run python -m unittest discover -s tests -v
 ```
 
 Run the small fixture pipeline used by CI:
 
 ```powershell
 docker compose up -d postgres
-.\.venv\Scripts\python.exe scripts\ci\run_fixture_pipeline.py --reset-warehouse
+uv run python scripts\ci\run_fixture_pipeline.py --reset-warehouse
 ```
 
 `--reset-warehouse` drops and recreates the local analytical schemas, so use it
@@ -136,8 +134,8 @@ for CI-style validation runs rather than ad hoc exploration.
 Prepare local raw files:
 
 ```powershell
-python scripts\ingestion\prepare_olist_raw_files.py --batch-date 2018-09-01 --batch-id 2018-09-01 --run-id manual_2018_09_01
-python scripts\ingestion\generate_correction_feeds.py --batch-date 2018-09-01 --batch-id 2018-09-01 --run-id manual_2018_09_01
+uv run python scripts\ingestion\prepare_olist_raw_files.py --batch-date 2018-09-01 --batch-id 2018-09-01 --run-id manual_2018_09_01
+uv run python scripts\ingestion\generate_correction_feeds.py --batch-date 2018-09-01 --batch-id 2018-09-01 --run-id manual_2018_09_01
 ```
 
 Both ingestion commands run row-level validation before warehouse load. Invalid
@@ -150,14 +148,14 @@ record, run ingestion against it, fix the dead-letter CSV, and replay the fixed
 row:
 
 ```powershell
-python scripts\utilities\create_dead_letter_demo_archive.py
-python scripts\loading\replay_dead_letters.py --entity order_payments --dead-letter-file <fixed_dead_letter_csv_gz> --replay-id demo_payment_fix
+uv run python scripts\utilities\create_dead_letter_demo_archive.py
+uv run python scripts\loading\replay_dead_letters.py --entity order_payments --dead-letter-file <fixed_dead_letter_csv_gz> --replay-id demo_payment_fix
 ```
 
 Load raw files into PostgreSQL:
 
 ```powershell
-python scripts\loading\load_raw_to_postgres.py `
+uv run python scripts\loading\load_raw_to_postgres.py `
   --bootstrap-sql-dir infra/postgres `
   --batch-date 2018-09-01 `
   --batch-id 2018-09-01 `
@@ -171,12 +169,12 @@ copy dbt\olist_analytics\profiles.yml.example dbt\olist_analytics\profiles.yml
 cd dbt\olist_analytics
 $env:DBT_PROFILES_DIR = (Get-Location).Path
 $env:POSTGRES_HOST = "localhost"
-dbt debug
-dbt source freshness
-dbt run --select staging intermediate --vars '{batch_date: "2018-09-01"}'
-dbt snapshot --vars '{batch_date: "2018-09-01"}'
-dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
-dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'
+uv run dbt debug
+uv run dbt source freshness
+uv run dbt run --select staging intermediate --vars '{batch_date: "2018-09-01"}'
+uv run dbt snapshot --vars '{batch_date: "2018-09-01"}'
+uv run dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
+uv run dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'
 ```
 
 ## Airflow DAGs
