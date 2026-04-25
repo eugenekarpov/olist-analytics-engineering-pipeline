@@ -14,5 +14,5 @@ select
     status,
     failed_checks,
     created_at
-from audit.batch_reconciliation
+from {{ source('pipeline_audit', 'batch_reconciliation') }}
 order by created_at desc, entity_name asc

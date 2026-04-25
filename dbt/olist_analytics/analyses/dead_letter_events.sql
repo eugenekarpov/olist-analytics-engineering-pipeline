@@ -10,5 +10,5 @@ select
     reason_summary,
     dead_letter_uri,
     created_at
-from audit.dead_letter_events
+from {{ source('pipeline_audit', 'dead_letter_events') }}
 order by created_at desc

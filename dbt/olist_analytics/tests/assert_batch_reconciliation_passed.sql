@@ -1,6 +1,6 @@
 with reconciliation as (
     select status
-    from audit.batch_reconciliation
+    from {{ source('pipeline_audit', 'batch_reconciliation') }}
     where batch_id = '{{ var("batch_date") }}'
 ),
 

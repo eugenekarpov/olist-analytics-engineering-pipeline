@@ -10,5 +10,5 @@ select
     raw_manifest_uri,
     correction_manifest_uri,
     error_message
-from audit.batch_runs
+from {{ source('pipeline_audit', 'batch_runs') }}
 order by updated_at desc

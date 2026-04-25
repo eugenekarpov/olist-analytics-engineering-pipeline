@@ -9,5 +9,5 @@ select
     started_at,
     finished_at,
     error_message
-from audit.dead_letter_replays
+from {{ source('pipeline_audit', 'dead_letter_replays') }}
 order by started_at desc
