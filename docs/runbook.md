@@ -124,7 +124,7 @@ $env:POSTGRES_PASSWORD = "olist"
 
 uv run dbt debug
 uv run dbt source freshness
-uv run dbt build --select staging intermediate --vars '{batch_date: "2018-09-01"}'
+uv run dbt build --select staging intermediate --indirect-selection cautious --vars '{batch_date: "2018-09-01"}'
 uv run dbt snapshot --vars '{batch_date: "2018-09-01"}'
 uv run dbt build --exclude resource_type:snapshot --vars '{batch_date: "2018-09-01", lookback_days: 3}'
 uv run dbt test --vars '{batch_date: "2018-09-01", lookback_days: 3}'

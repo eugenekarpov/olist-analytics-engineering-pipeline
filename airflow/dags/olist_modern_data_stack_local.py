@@ -205,7 +205,8 @@ with DAG(
         task_id="dbt_build_snapshot_inputs",
         cwd=str(DBT_PROJECT_DIR),
         bash_command=(
-            "dbt build --select staging intermediate --vars "
+            "dbt build --select staging intermediate "
+            "--indirect-selection cautious --vars "
             "'{batch_date: \"{{ params.batch_date }}\"}'"
         ),
     )

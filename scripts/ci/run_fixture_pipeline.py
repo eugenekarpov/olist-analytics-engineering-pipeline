@@ -278,6 +278,8 @@ def run_pipeline(args: argparse.Namespace, env: dict[str, str]) -> None:
             "--select",
             "staging",
             "intermediate",
+            "--indirect-selection",
+            "cautious",
             "--threads",
             str(args.dbt_threads),
             "--vars",
