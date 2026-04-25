@@ -8,8 +8,8 @@ instead of becoming one large opaque pipeline failure.
 
 ```text
 lint
-  -> Ruff linting, Ruff formatting, SQLFluff dbt linting, and the same
-     pre-commit hooks developers run locally.
+  -> Ruff linting, Ruff formatting, SQLFluff dbt linting against a lightweight
+     PostgreSQL service, and the same pre-commit hooks developers run locally.
 
 python-unit
   -> Python syntax, source contract fixture validation, unit tests,
@@ -72,7 +72,9 @@ uv run dbt parse --no-partial-parse --show-all-deprecations
 
 SQLFluff uses the dbt templater and the local PostgreSQL dbt profile. If
 `profiles.yml` is missing locally, copy it from `profiles.yml.example` before
-running SQLFluff or pre-commit.
+running SQLFluff or pre-commit. The CI lint job starts PostgreSQL because dbt
+can open a warehouse connection while compiling incremental models for
+SQLFluff.
 
 Small fixture integration:
 
