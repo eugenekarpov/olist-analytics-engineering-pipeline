@@ -4,7 +4,7 @@
 
 Build a production-like batch analytics pipeline for the Olist e-commerce
 dataset that can run fully locally. The active stack is Python, a local
-S3-shaped raw zone, PostgreSQL 18 in Docker, Apache Airflow, and dbt.
+S3-shaped raw zone, PostgreSQL 18.3 in Docker, Apache Airflow 3.2.1, and dbt.
 
 The original AWS S3 + Redshift design remains documented under `infra/redshift`
 and `infra/aws`, but it is no longer required for the main development loop.
@@ -72,7 +72,7 @@ raw load.
 
 ### PostgreSQL
 
-PostgreSQL 18 is the default local warehouse.
+PostgreSQL 18.3 is the default local warehouse.
 
 Schemas:
 

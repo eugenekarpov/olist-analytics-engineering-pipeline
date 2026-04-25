@@ -3,9 +3,10 @@
 This folder contains the orchestration layer for the Olist Modern Data Stack
 project.
 
-The local Docker Compose setup runs Airflow in standalone mode with SQLite and
-`SequentialExecutor`. PostgreSQL is used as the analytics warehouse, not as the
-Airflow metadata database.
+The local Docker Compose setup runs Airflow 3.2.1 in standalone mode with
+`LocalExecutor`. Airflow metadata is stored in a dedicated PostgreSQL 17.9
+container, while the analytical warehouse uses a separate PostgreSQL 18.3
+container.
 
 ## DAGs
 
@@ -78,11 +79,22 @@ Open:
 http://localhost:8080
 ```
 
-Airflow standalone prints the generated admin password in container logs on the
-first startup:
+Local development credentials are static:
+
+```text
+username: admin
+password: admin
+```
+
+The password is pinned through
+`airflow/simple_auth_manager_passwords.json`, which is used by Airflow 3's
+SimpleAuthManager. This is intended only for local development.
+
+If you change the password file and then reset Airflow metadata, start the
+stack again with:
 
 ```powershell
-docker compose logs airflow
+docker compose up -d
 ```
 
 Stop containers:
@@ -91,14 +103,7 @@ Stop containers:
 docker compose down
 ```
 
-Reset Airflow metadata:
-
-```powershell
-docker compose down
-Remove-Item airflow\airflow.db -Force
-```
-
-Reset the local PostgreSQL warehouse:
+Reset the local PostgreSQL warehouse and Airflow metadata:
 
 ```powershell
 docker compose down -v
@@ -106,7 +111,7 @@ docker compose down -v
 
 ## VS Code and Pylance
 
-Airflow is provided by the Docker image (`apache/airflow:2.10.5-python3.11`),
+Airflow is provided by the Docker image (`apache/airflow:3.2.1-python3.14`),
 not by the local Windows virtual environment. The repository includes minimal
 Pylance stubs under `.pyright/typings/airflow` so VS Code can resolve DAG
 imports while the real runtime dependency remains in the Airflow container.

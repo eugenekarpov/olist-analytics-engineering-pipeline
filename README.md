@@ -2,8 +2,8 @@
 
 This repository is a data engineering pet project built around the Olist
 Brazilian e-commerce dataset. The current version is local-first: it runs with
-Python ingestion, a local S3-shaped raw zone, PostgreSQL 18 in Docker, Apache
-Airflow, and dbt.
+Python ingestion, a local S3-shaped raw zone, PostgreSQL 18.3 in Docker,
+Apache Airflow 3.2.1, and dbt.
 
 The original AWS S3 + Amazon Redshift design is preserved under `infra/redshift`
 and the git tag `aws-redshift-prototype`. The active `main` branch is designed
@@ -82,7 +82,7 @@ scripts/
 
 ## Local Commands
 
-Install uv, create the Python 3.11 environment, and install locked project
+Install uv, create the Python 3.14 environment, and install locked project
 dependencies:
 
 ```powershell
@@ -103,7 +103,7 @@ Install the pre-commit hooks once per clone:
 uv run pre-commit install
 ```
 
-Start PostgreSQL 18 and Airflow:
+Start PostgreSQL 18.3 and Airflow 3.2.1:
 
 ```powershell
 copy .env.example .env
@@ -111,9 +111,16 @@ docker compose build
 docker compose up -d
 ```
 
-PostgreSQL uses the official `postgres:18` image. Because PostgreSQL 18 changed
-the image data layout, Compose mounts the named volume at `/var/lib/postgresql`
-and sets `PGDATA=/var/lib/postgresql/18/docker`.
+Airflow opens at `http://localhost:8080` with local development credentials
+`admin` / `admin`. These credentials are intentionally pinned for repeatable
+`docker compose down -v` resets.
+
+The analytical warehouse uses `postgres:18.3`. Because PostgreSQL 18 changed
+the image data layout, Compose mounts the named warehouse volume at
+`/var/lib/postgresql` and sets `PGDATA=/var/lib/postgresql/18/docker`.
+Airflow metadata uses a separate `postgres:17.9` service with its data volume
+mounted at `/var/lib/postgresql/data`, which is the correct persistent mount
+target for PostgreSQL 17 and below.
 
 Validate the local archive:
 
@@ -227,7 +234,9 @@ validate_source_contract
 
 ## Main Design Decisions
 
-- PostgreSQL 18 in Docker is the default local warehouse.
+- PostgreSQL 18.3 in Docker is the default local warehouse.
+- Airflow 3.2.1 runs with `LocalExecutor` and a dedicated PostgreSQL 17.9
+  metadata database.
 - The raw zone is local filesystem storage, but keeps S3-style deterministic
   paths.
 - Record-level ingestion failures are isolated in the dead-letter zone; source

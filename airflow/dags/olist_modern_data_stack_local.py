@@ -11,11 +11,13 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from airflow import DAG  # pyright: ignore[reportMissingImports]
-from airflow.operators.bash import BashOperator  # pyright: ignore[reportMissingImports]
-from airflow.operators.empty import (
+from airflow.providers.standard.operators.bash import (
+    BashOperator,  # pyright: ignore[reportMissingImports]
+)
+from airflow.providers.standard.operators.empty import (
     EmptyOperator,  # pyright: ignore[reportMissingImports]
 )
+from airflow.sdk import DAG  # pyright: ignore[reportMissingImports]
 
 DAG_ID = "olist_modern_data_stack_local"
 PROJECT_ROOT = Path(

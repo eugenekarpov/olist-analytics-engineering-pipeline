@@ -7,20 +7,20 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from airflow import (
-    DAG,  # pyright: ignore[reportMissingImports,reportMissingModuleSource]
-)
 from airflow.exceptions import (
     AirflowException,  # pyright: ignore[reportMissingImports,reportMissingModuleSource]
 )
-from airflow.operators.bash import (
+from airflow.providers.standard.operators.bash import (
     BashOperator,  # pyright: ignore[reportMissingImports,reportMissingModuleSource]
 )
-from airflow.operators.empty import (
+from airflow.providers.standard.operators.empty import (
     EmptyOperator,  # pyright: ignore[reportMissingImports,reportMissingModuleSource]
 )
-from airflow.operators.python import (
+from airflow.providers.standard.operators.python import (
     PythonOperator,  # pyright: ignore[reportMissingImports,reportMissingModuleSource]
+)
+from airflow.sdk import (
+    DAG,  # pyright: ignore[reportMissingImports,reportMissingModuleSource]
 )
 
 DAG_ID = "olist_modern_data_stack"

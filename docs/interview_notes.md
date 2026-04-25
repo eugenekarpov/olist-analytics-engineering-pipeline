@@ -3,8 +3,8 @@
 ## Elevator Pitch
 
 This project implements a production-like batch analytics platform for an
-e-commerce dataset using Python, a local S3-shaped raw zone, PostgreSQL 18,
-Apache Airflow, and dbt.
+e-commerce dataset using Python, a local S3-shaped raw zone, PostgreSQL 18.3,
+Apache Airflow 3.2.1, and dbt.
 
 The first design targeted AWS S3 and Amazon Redshift. Because Redshift access
 was not available, the project was adapted into a fully reproducible local

@@ -21,7 +21,7 @@ copy .env.example .env
 copy dbt\olist_analytics\profiles.yml.example dbt\olist_analytics\profiles.yml
 ```
 
-Start PostgreSQL 18 and Airflow:
+Start PostgreSQL 18.3 and Airflow 3.2.1:
 
 ```powershell
 docker compose build
@@ -38,8 +38,10 @@ user: olist
 password: olist
 ```
 
-The Compose volume for PostgreSQL 18 is mounted at `/var/lib/postgresql`, with
-`PGDATA=/var/lib/postgresql/18/docker`.
+The analytical warehouse uses PostgreSQL 18.3. Its Compose volume is mounted at
+`/var/lib/postgresql`, with `PGDATA=/var/lib/postgresql/18/docker`.
+Airflow metadata uses a separate PostgreSQL 17.9 container and persists data at
+`/var/lib/postgresql/data`.
 
 ## Manual Smoke Run Without Airflow
 
@@ -136,6 +138,13 @@ Open Airflow:
 http://localhost:8080
 ```
 
+Local development credentials:
+
+```text
+username: admin
+password: admin
+```
+
 The local DAG is:
 
 ```text
@@ -163,13 +172,6 @@ dbt_run_snapshot_inputs
 dbt_snapshot
 dbt_build
 dbt_test
-```
-
-Airflow standalone prints the generated admin password in container logs on the
-first startup:
-
-```powershell
-docker compose logs airflow
 ```
 
 ## Quality Gates

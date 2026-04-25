@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:18
+    image: postgres:18.3
     container_name: olist-postgres
     restart: unless-stopped
     shm_size: 128mb
@@ -20,6 +20,24 @@ services:
       retries: 5
       start_period: 20s
 
+  airflow-postgres:
+    image: postgres:17.9
+    container_name: olist-airflow-postgres
+    restart: unless-stopped
+    shm_size: 128mb
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   airflow:
     build:
       context: .
@@ -27,8 +45,11 @@ services:
     image: olist-airflow:local
     container_name: olist-airflow
     restart: unless-stopped
+    working_dir: /opt/airflow/project
     depends_on:
       postgres:
+        condition: service_healthy
+      airflow-postgres:
         condition: service_healthy
     command:
       - bash
@@ -38,11 +59,13 @@ services:
     ports:
       - "8080:8080"
     environment:
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/project/airflow/airflow.db
-      AIRFLOW__WEBSERVER__SECRET_KEY: local_dev_only_secret_key
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/project/airflow/simple_auth_manager_passwords.json
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__API__SECRET_KEY: local_dev_only_secret_key
       OLIST_PROJECT_ROOT: /opt/airflow/project
       OLIST_PYTHON_BIN: python
       DBT_PROFILES_DIR: /opt/airflow/project/dbt/olist_analytics
@@ -66,3 +89,4 @@ services:
 
 volumes:
   olist_postgres_data:
+  airflow_postgres_data:

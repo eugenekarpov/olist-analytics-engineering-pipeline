@@ -23,12 +23,12 @@ Redshift access is available.
 AWS infrastructure is documented but not provisioned as code. Terraform is a
 good future enhancement after the local path is stable.
 
-## Local Airflow Uses SQLite
+## Local Airflow Is Still Single-Node
 
-The project includes a Docker Compose Airflow runtime, but it intentionally uses
-SQLite and `SequentialExecutor` for local testing. This is fine for a pet
-project, but a production Airflow deployment should use a metadata database such
-as Postgres and a production executor.
+The project includes a Docker Compose Airflow 3.2.1 runtime with `LocalExecutor`
+and PostgreSQL metadata storage. It is still a local single-node setup rather
+than a production deployment with separate scheduler, API server, workers,
+external secrets, backups, monitoring, and database pooling.
 
 ## SCD2 Correction Feed Size
 

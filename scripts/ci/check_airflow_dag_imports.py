@@ -8,13 +8,9 @@ from pathlib import Path
 
 # Keep the import-only CI check away from repository-mounted Airflow state.
 os.environ.setdefault("AIRFLOW_HOME", "/tmp/airflow")
-os.environ.setdefault(
-    "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",
-    "sqlite:////tmp/airflow/airflow.db",
-)
 os.environ.setdefault("AIRFLOW__LOGGING__BASE_LOG_FOLDER", "/tmp/airflow/logs")
 
-from airflow.models import DagBag
+from airflow.dag_processing.dagbag import DagBag
 
 PROJECT_ROOT = Path(os.environ.get("OLIST_PROJECT_ROOT", Path.cwd()))
 DAGS_DIR = Path(

@@ -19,10 +19,11 @@ dbt-static
   -> dbt parse without a warehouse connection.
 
 airflow-imports
-  -> docker compose config, Airflow image build, and isolated DagBag imports.
+  -> docker compose config, Airflow image build, PostgreSQL 17.9 metadata
+     service startup, and isolated DagBag imports.
 
 fixture-integration
-  -> PostgreSQL 18 service container and the small fixture end-to-end path.
+  -> PostgreSQL 18.3 service container and the small fixture end-to-end path.
 ```
 
 ## Small Fixture Dataset
