@@ -102,6 +102,12 @@ Use the OS-specific runbook:
 Both runbooks cover dependency setup, Docker Compose, manual smoke runs, the
 Airflow DAG, dbt execution, CI-style fixture validation, and cleanup.
 
+## Data License
+
+The repository includes the Olist Brazilian E-Commerce Public Dataset archive
+for reproducible local runs. See [Data license](DATA_LICENSE.md) for source
+attribution and license terms.
+
 ## More Documentation
 
 - [Architecture](docs/architecture.md)
