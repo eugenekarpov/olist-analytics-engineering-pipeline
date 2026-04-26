@@ -53,6 +53,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dbt-bin")
     parser.add_argument("--skip-dbt", action="store_true")
     parser.add_argument("--reset-warehouse", action="store_true")
+    parser.add_argument(
+        "--full-refresh",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Run the final dbt build with --full-refresh. Use --no-full-refresh "
+            "for incremental replay checks."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -302,18 +311,21 @@ def run_pipeline(args: argparse.Namespace, env: dict[str, str]) -> None:
         env=env,
     )
     mark_batch("DBT_SNAPSHOTTED", args, env)
+    dbt_build_command = [
+        dbt,
+        "build",
+        "--exclude",
+        "resource_type:snapshot",
+        "--threads",
+        str(args.dbt_threads),
+        "--vars",
+        dbt_vars,
+    ]
+    if args.full_refresh:
+        dbt_build_command.insert(4, "--full-refresh")
+
     run(
-        [
-            dbt,
-            "build",
-            "--exclude",
-            "resource_type:snapshot",
-            "--full-refresh",
-            "--threads",
-            str(args.dbt_threads),
-            "--vars",
-            dbt_vars,
-        ],
+        dbt_build_command,
         cwd=DBT_PROJECT_DIR,
         env=env,
     )
