@@ -11,12 +11,28 @@ from airflow.exceptions import AirflowException
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.sdk import DAG
+from airflow.sdk import Param, dag, task_group
 
 DAG_ID = "olist_modern_data_stack"
-PROJECT_ROOT = Path(
-    os.environ.get("OLIST_PROJECT_ROOT", Path(__file__).resolve().parents[2])
-)
+
+
+def resolve_project_root() -> Path:
+    configured_root = os.environ.get("OLIST_PROJECT_ROOT")
+    if configured_root:
+        return Path(configured_root)
+
+    for candidate in (Path.cwd(), *Path(__file__).resolve().parents):
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+
+    airflow_project_root = Path("/opt/airflow/project")
+    if airflow_project_root.exists():
+        return airflow_project_root
+
+    return Path(__file__).resolve().parents[2]
+
+
+PROJECT_ROOT = resolve_project_root()
 PYTHON_BIN = os.environ.get("OLIST_PYTHON_BIN", "python")
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt" / "olist_analytics"
 SOURCE_PROFILE_PATH = PROJECT_ROOT / "docs" / "source_profile.json"
@@ -158,7 +174,29 @@ default_args = {
 }
 
 
-with DAG(
+dag_params = {
+    "batch_date": Param(
+        DEFAULT_DEMO_BATCH_DATE,
+        type="string",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Batch date in YYYY-MM-DD format.",
+    ),
+    "lookback_days": Param(
+        3,
+        type="integer",
+        minimum=0,
+        maximum=365,
+        description="Late-arriving data lookback window for incremental dbt models.",
+    ),
+    "full_refresh": Param(
+        False,
+        type="boolean",
+        description="Run dbt build with --full-refresh.",
+    ),
+}
+
+
+@dag(
     dag_id=DAG_ID,
     description="Olist batch pipeline: S3 raw load, Redshift COPY, and dbt transformations.",
     default_args=default_args,
@@ -167,114 +205,116 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     tags=["olist", "s3", "redshift", "dbt"],
-    params={
-        "batch_date": DEFAULT_DEMO_BATCH_DATE,
-        "lookback_days": 3,
-        "full_refresh": False,
-    },
-) as dag:
+    params=dag_params,
+)
+def olist_modern_data_stack():
     start = EmptyOperator(task_id="start")
 
-    validate_source_contract = BashOperator(
-        task_id="validate_source_contract",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/utilities/validate_source_contract.py "
-            "--archive olist.zip "
-            "--profile docs/source_profile.json"
-        ),
-    )
+    @task_group(group_id="raw_ingestion")
+    def raw_ingestion():
+        validate_source_contract = BashOperator(
+            task_id="validate_source_contract",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/utilities/validate_source_contract.py "
+                "--archive olist.zip "
+                "--profile docs/source_profile.json"
+            ),
+        )
 
-    upload_raw_files_to_s3 = BashOperator(
-        task_id="upload_raw_files_to_s3",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/ingestion/ingest_olist_to_s3.py "
-            "--archive olist.zip "
-            "--profile docs/source_profile.json "
-            "--output-dir data/prepared/{{{{ ds_nodash }}}} "
-            "--batch-date '{{{{ params.batch_date }}}}' "
-            "--run-id '{{{{ run_id }}}}' "
-            '--s3-bucket "$OLIST_S3_BUCKET" '
-            '--s3-prefix "$OLIST_S3_PREFIX" '
-            "--upload"
-        ),
-    )
+        upload_raw_files_to_s3 = BashOperator(
+            task_id="upload_raw_files_to_s3",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/ingestion/ingest_olist_to_s3.py "
+                "--archive olist.zip "
+                "--profile docs/source_profile.json "
+                "--output-dir data/prepared/{{ ds_nodash }} "
+                "--batch-date '{{ params.batch_date }}' "
+                "--run-id '{{ run_id }}' "
+                '--s3-bucket "$OLIST_S3_BUCKET" '
+                '--s3-prefix "$OLIST_S3_PREFIX" '
+                "--upload"
+            ),
+        )
 
-    generate_and_upload_correction_feeds = BashOperator(
-        task_id="generate_and_upload_correction_feeds",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/ingestion/generate_correction_feeds.py "
-            "--archive olist.zip "
-            "--output-dir data/prepared/{{{{ ds_nodash }}}} "
-            "--batch-date '{{{{ params.batch_date }}}}' "
-            "--run-id '{{{{ run_id }}}}' "
-            '--s3-bucket "$OLIST_S3_BUCKET" '
-            '--s3-prefix "$OLIST_S3_PREFIX" '
-            "--upload"
-        ),
-    )
+        generate_and_upload_correction_feeds = BashOperator(
+            task_id="generate_and_upload_correction_feeds",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/ingestion/generate_correction_feeds.py "
+                "--archive olist.zip "
+                "--output-dir data/prepared/{{ ds_nodash }} "
+                "--batch-date '{{ params.batch_date }}' "
+                "--run-id '{{ run_id }}' "
+                '--s3-bucket "$OLIST_S3_BUCKET" '
+                '--s3-prefix "$OLIST_S3_PREFIX" '
+                "--upload"
+            ),
+        )
 
-    copy_raw_files_to_redshift = PythonOperator(
-        task_id="copy_raw_files_to_redshift",
-        python_callable=copy_raw_files_to_redshift_callable,
-    )
+        copy_raw_files_to_redshift = PythonOperator(
+            task_id="copy_raw_files_to_redshift",
+            python_callable=copy_raw_files_to_redshift_callable,
+        )
 
-    dbt_build_snapshot_inputs = BashOperator(
-        task_id="dbt_build_snapshot_inputs",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command=(
-            "dbt build --select staging intermediate "
-            "--indirect-selection cautious --vars "
-            "'{batch_date: \"{{ params.batch_date }}\"}'"
-        ),
-    )
+        (
+            validate_source_contract
+            >> upload_raw_files_to_s3
+            >> generate_and_upload_correction_feeds
+            >> copy_raw_files_to_redshift
+        )
 
-    dbt_snapshot = BashOperator(
-        task_id="dbt_snapshot",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command="dbt snapshot --vars '{batch_date: \"{{ params.batch_date }}\"}'",
-    )
+    @task_group(group_id="dbt_transformations")
+    def dbt_transformations():
+        dbt_build_snapshot_inputs = BashOperator(
+            task_id="dbt_build_snapshot_inputs",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command=(
+                "dbt build --select staging intermediate "
+                "--indirect-selection cautious --vars "
+                "'{batch_date: \"{{ params.batch_date }}\"}'"
+            ),
+        )
 
-    dbt_build_command = (
-        "dbt build --exclude resource_type:snapshot --vars "
-        "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
-    )
+        dbt_snapshot = BashOperator(
+            task_id="dbt_snapshot",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command="dbt snapshot --vars '{batch_date: \"{{ params.batch_date }}\"}'",
+        )
 
-    dbt_build = BashOperator(
-        task_id="dbt_build",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command=(
-            "{% if params.full_refresh %}"
-            + dbt_build_command
-            + " --full-refresh"
-            + "{% else %}"
-            + dbt_build_command
-            + "{% endif %}"
-        ),
-    )
-
-    dbt_test = BashOperator(
-        task_id="dbt_test",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command=(
-            "dbt test --vars "
+        dbt_build_command = (
+            "dbt build --exclude resource_type:snapshot --vars "
             "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
-        ),
-    )
+        )
+
+        dbt_build = BashOperator(
+            task_id="dbt_build",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command=(
+                "{% if params.full_refresh %}"
+                + dbt_build_command
+                + " --full-refresh"
+                + "{% else %}"
+                + dbt_build_command
+                + "{% endif %}"
+            ),
+        )
+
+        dbt_test = BashOperator(
+            task_id="dbt_test",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command=(
+                "dbt test --vars "
+                "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
+            ),
+        )
+
+        dbt_build_snapshot_inputs >> dbt_snapshot >> dbt_build >> dbt_test
 
     end = EmptyOperator(task_id="end")
 
-    _ = (
-        start
-        >> validate_source_contract
-        >> upload_raw_files_to_s3
-        >> generate_and_upload_correction_feeds
-        >> copy_raw_files_to_redshift
-        >> dbt_build_snapshot_inputs
-        >> dbt_snapshot
-        >> dbt_build
-        >> dbt_test
-        >> end
-    )
+    start >> raw_ingestion() >> dbt_transformations() >> end
+
+
+olist_modern_data_stack()

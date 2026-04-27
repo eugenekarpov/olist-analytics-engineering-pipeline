@@ -13,12 +13,28 @@ from pathlib import Path
 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
-from airflow.sdk import DAG
+from airflow.sdk import Param, dag, task_group
 
 DAG_ID = "olist_modern_data_stack_local"
-PROJECT_ROOT = Path(
-    os.environ.get("OLIST_PROJECT_ROOT", Path(__file__).resolve().parents[2])
-)
+
+
+def resolve_project_root() -> Path:
+    configured_root = os.environ.get("OLIST_PROJECT_ROOT")
+    if configured_root:
+        return Path(configured_root)
+
+    for candidate in (Path.cwd(), *Path(__file__).resolve().parents):
+        if (candidate / "pyproject.toml").exists():
+            return candidate
+
+    airflow_project_root = Path("/opt/airflow/project")
+    if airflow_project_root.exists():
+        return airflow_project_root
+
+    return Path(__file__).resolve().parents[2]
+
+
+PROJECT_ROOT = resolve_project_root()
 PYTHON_BIN = os.environ.get("OLIST_PYTHON_BIN", "python")
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt" / "olist_analytics"
 LOCAL_RAW_DIR = "data/raw/olist"
@@ -92,7 +108,43 @@ default_args = {
 }
 
 
-with DAG(
+dag_params = {
+    "batch_date": Param(
+        DEFAULT_DEMO_BATCH_DATE,
+        type="string",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Batch date in YYYY-MM-DD format.",
+    ),
+    "lookback_days": Param(
+        3,
+        type="integer",
+        minimum=0,
+        maximum=365,
+        description="Late-arriving data lookback window for incremental dbt models.",
+    ),
+    "full_refresh": Param(
+        False,
+        type="boolean",
+        description="Run dbt build with --full-refresh.",
+    ),
+    "dead_letter_max_rows": Param(
+        10,
+        type="integer",
+        minimum=0,
+        maximum=100000,
+        description="Maximum accepted dead-letter row count.",
+    ),
+    "dead_letter_max_rate": Param(
+        0.001,
+        type="number",
+        minimum=0,
+        maximum=1,
+        description="Maximum accepted dead-letter rate.",
+    ),
+}
+
+
+@dag(
     dag_id=DAG_ID,
     description="Olist batch pipeline: local raw files, PostgreSQL load, and dbt transformations.",
     default_args=default_args,
@@ -101,14 +153,9 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     tags=["olist", "local", "postgres", "dbt"],
-    params={
-        "batch_date": DEFAULT_DEMO_BATCH_DATE,
-        "lookback_days": 3,
-        "full_refresh": False,
-        "dead_letter_max_rows": 10,
-        "dead_letter_max_rate": 0.001,
-    },
-) as dag:
+    params=dag_params,
+)
+def olist_modern_data_stack_local():
     start = EmptyOperator(task_id="start")
 
     start_batch = BashOperator(
@@ -117,175 +164,193 @@ with DAG(
         bash_command=batch_control_command("start"),
     )
 
-    validate_source_contract = BashOperator(
-        task_id="validate_source_contract",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/utilities/validate_source_contract.py "
-            "--archive olist.zip "
-            "--profile docs/source_profile.json"
-        ),
-    )
+    @task_group(group_id="raw_preparation")
+    def raw_preparation():
+        validate_source_contract = BashOperator(
+            task_id="validate_source_contract",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/utilities/validate_source_contract.py "
+                "--archive olist.zip "
+                "--profile docs/source_profile.json"
+            ),
+        )
 
-    mark_source_validated = BashOperator(
-        task_id="mark_source_validated",
-        cwd=str(PROJECT_ROOT),
-        bash_command=batch_control_command("mark", "SOURCE_VALIDATED"),
-    )
+        mark_source_validated = BashOperator(
+            task_id="mark_source_validated",
+            cwd=str(PROJECT_ROOT),
+            bash_command=batch_control_command("mark", "SOURCE_VALIDATED"),
+        )
 
-    prepare_raw_files = BashOperator(
-        task_id="prepare_raw_files",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/ingestion/prepare_olist_raw_files.py "
-            "--archive olist.zip "
-            "--profile docs/source_profile.json "
-            f"--output-dir {LOCAL_RAW_DIR} "
-            "--batch-date '{{ params.batch_date }}' "
-            f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}' "
-            "--dead-letter-max-rows '{{ params.dead_letter_max_rows }}' "
-            "--dead-letter-max-rate '{{ params.dead_letter_max_rate }}'"
-        ),
-    )
+        prepare_raw_files = BashOperator(
+            task_id="prepare_raw_files",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/ingestion/prepare_olist_raw_files.py "
+                "--archive olist.zip "
+                "--profile docs/source_profile.json "
+                f"--output-dir {LOCAL_RAW_DIR} "
+                "--batch-date '{{ params.batch_date }}' "
+                f"--batch-id '{LOCAL_BATCH_ID}' "
+                f"--run-id '{LOCAL_RUN_ID}' "
+                "--dead-letter-max-rows '{{ params.dead_letter_max_rows }}' "
+                "--dead-letter-max-rate '{{ params.dead_letter_max_rate }}'"
+            ),
+        )
 
-    generate_correction_feeds = BashOperator(
-        task_id="generate_correction_feeds",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/ingestion/generate_correction_feeds.py "
-            "--archive olist.zip "
-            f"--output-dir {LOCAL_RAW_DIR} "
-            "--batch-date '{{ params.batch_date }}' "
-            f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}' "
-            "--dead-letter-max-rows '{{ params.dead_letter_max_rows }}' "
-            "--dead-letter-max-rate '{{ params.dead_letter_max_rate }}'"
-        ),
-    )
+        generate_correction_feeds = BashOperator(
+            task_id="generate_correction_feeds",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/ingestion/generate_correction_feeds.py "
+                "--archive olist.zip "
+                f"--output-dir {LOCAL_RAW_DIR} "
+                "--batch-date '{{ params.batch_date }}' "
+                f"--batch-id '{LOCAL_BATCH_ID}' "
+                f"--run-id '{LOCAL_RUN_ID}' "
+                "--dead-letter-max-rows '{{ params.dead_letter_max_rows }}' "
+                "--dead-letter-max-rate '{{ params.dead_letter_max_rate }}'"
+            ),
+        )
 
-    mark_raw_prepared = BashOperator(
-        task_id="mark_raw_prepared",
-        cwd=str(PROJECT_ROOT),
-        bash_command=batch_control_command("mark", "RAW_PREPARED"),
-    )
+        mark_raw_prepared = BashOperator(
+            task_id="mark_raw_prepared",
+            cwd=str(PROJECT_ROOT),
+            bash_command=batch_control_command("mark", "RAW_PREPARED"),
+        )
 
-    load_raw_files_to_postgres = BashOperator(
-        task_id="load_raw_files_to_postgres",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/loading/load_raw_to_postgres.py "
-            f"--raw-dir {LOCAL_RAW_DIR} "
-            "--profile docs/source_profile.json "
-            f"--bootstrap-sql-dir {POSTGRES_SQL_DIR} "
-            "--batch-date '{{ params.batch_date }}' "
-            f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}' "
-            f"--dag-id {DAG_ID}"
-        ),
-    )
+        (
+            validate_source_contract
+            >> mark_source_validated
+            >> prepare_raw_files
+            >> generate_correction_feeds
+            >> mark_raw_prepared
+        )
 
-    reconcile_raw_load = BashOperator(
-        task_id="reconcile_raw_load",
-        cwd=str(PROJECT_ROOT),
-        bash_command=(
-            f"{PYTHON_BIN} scripts/quality/reconcile_batch.py "
-            f"--raw-dir {LOCAL_RAW_DIR} "
-            "--profile docs/source_profile.json "
-            f"--bootstrap-sql-dir {POSTGRES_SQL_DIR} "
-            "--batch-date '{{ params.batch_date }}' "
-            f"--batch-id '{LOCAL_BATCH_ID}' "
-            f"--run-id '{LOCAL_RUN_ID}' "
-            f"--dag-id {DAG_ID}"
-        ),
-    )
+    @task_group(group_id="raw_load_quality")
+    def raw_load_quality():
+        load_raw_files_to_postgres = BashOperator(
+            task_id="load_raw_files_to_postgres",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/loading/load_raw_to_postgres.py "
+                f"--raw-dir {LOCAL_RAW_DIR} "
+                "--profile docs/source_profile.json "
+                f"--bootstrap-sql-dir {POSTGRES_SQL_DIR} "
+                "--batch-date '{{ params.batch_date }}' "
+                f"--batch-id '{LOCAL_BATCH_ID}' "
+                f"--run-id '{LOCAL_RUN_ID}' "
+                f"--dag-id {DAG_ID}"
+            ),
+        )
 
-    dbt_build_snapshot_inputs = BashOperator(
-        task_id="dbt_build_snapshot_inputs",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command=(
-            "dbt build --select staging intermediate "
-            "--indirect-selection cautious --vars "
-            "'{batch_date: \"{{ params.batch_date }}\"}'"
-        ),
-    )
+        reconcile_raw_load = BashOperator(
+            task_id="reconcile_raw_load",
+            cwd=str(PROJECT_ROOT),
+            bash_command=(
+                f"{PYTHON_BIN} scripts/quality/reconcile_batch.py "
+                f"--raw-dir {LOCAL_RAW_DIR} "
+                "--profile docs/source_profile.json "
+                f"--bootstrap-sql-dir {POSTGRES_SQL_DIR} "
+                "--batch-date '{{ params.batch_date }}' "
+                f"--batch-id '{LOCAL_BATCH_ID}' "
+                f"--run-id '{LOCAL_RUN_ID}' "
+                f"--dag-id {DAG_ID}"
+            ),
+        )
 
-    mark_snapshot_inputs_built = BashOperator(
-        task_id="mark_snapshot_inputs_built",
-        cwd=str(PROJECT_ROOT),
-        bash_command=batch_control_command("mark", "DBT_SNAPSHOT_INPUTS_BUILT"),
-    )
+        load_raw_files_to_postgres >> reconcile_raw_load
 
-    dbt_snapshot = BashOperator(
-        task_id="dbt_snapshot",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command="dbt snapshot --vars '{batch_date: \"{{ params.batch_date }}\"}'",
-    )
+    @task_group(group_id="dbt_transformations")
+    def dbt_transformations():
+        dbt_build_snapshot_inputs = BashOperator(
+            task_id="dbt_build_snapshot_inputs",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command=(
+                "dbt build --select staging intermediate "
+                "--indirect-selection cautious --vars "
+                "'{batch_date: \"{{ params.batch_date }}\"}'"
+            ),
+        )
 
-    mark_dbt_snapshotted = BashOperator(
-        task_id="mark_dbt_snapshotted",
-        cwd=str(PROJECT_ROOT),
-        bash_command=batch_control_command("mark", "DBT_SNAPSHOTTED"),
-    )
+        mark_snapshot_inputs_built = BashOperator(
+            task_id="mark_snapshot_inputs_built",
+            cwd=str(PROJECT_ROOT),
+            bash_command=batch_control_command("mark", "DBT_SNAPSHOT_INPUTS_BUILT"),
+        )
 
-    dbt_build_command = (
-        "dbt build --exclude resource_type:snapshot --vars "
-        "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
-    )
+        dbt_snapshot = BashOperator(
+            task_id="dbt_snapshot",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command="dbt snapshot --vars '{batch_date: \"{{ params.batch_date }}\"}'",
+        )
 
-    dbt_build = BashOperator(
-        task_id="dbt_build",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command=(
-            "{% if params.full_refresh %}"
-            + dbt_build_command
-            + " --full-refresh"
-            + "{% else %}"
-            + dbt_build_command
-            + "{% endif %}"
-        ),
-    )
+        mark_dbt_snapshotted = BashOperator(
+            task_id="mark_dbt_snapshotted",
+            cwd=str(PROJECT_ROOT),
+            bash_command=batch_control_command("mark", "DBT_SNAPSHOTTED"),
+        )
 
-    mark_dbt_built = BashOperator(
-        task_id="mark_dbt_built",
-        cwd=str(PROJECT_ROOT),
-        bash_command=batch_control_command("mark", "DBT_BUILT"),
-    )
-
-    dbt_test = BashOperator(
-        task_id="dbt_test",
-        cwd=str(DBT_PROJECT_DIR),
-        bash_command=(
-            "dbt test --vars "
+        dbt_build_command = (
+            "dbt build --exclude resource_type:snapshot --vars "
             "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
-        ),
-    )
+        )
 
-    mark_tested = BashOperator(
-        task_id="mark_tested",
-        cwd=str(PROJECT_ROOT),
-        bash_command=batch_control_command("mark", "TESTED"),
-    )
+        dbt_build = BashOperator(
+            task_id="dbt_build",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command=(
+                "{% if params.full_refresh %}"
+                + dbt_build_command
+                + " --full-refresh"
+                + "{% else %}"
+                + dbt_build_command
+                + "{% endif %}"
+            ),
+        )
+
+        mark_dbt_built = BashOperator(
+            task_id="mark_dbt_built",
+            cwd=str(PROJECT_ROOT),
+            bash_command=batch_control_command("mark", "DBT_BUILT"),
+        )
+
+        dbt_test = BashOperator(
+            task_id="dbt_test",
+            cwd=str(DBT_PROJECT_DIR),
+            bash_command=(
+                "dbt test --vars "
+                "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
+            ),
+        )
+
+        mark_tested = BashOperator(
+            task_id="mark_tested",
+            cwd=str(PROJECT_ROOT),
+            bash_command=batch_control_command("mark", "TESTED"),
+        )
+
+        (
+            dbt_build_snapshot_inputs
+            >> mark_snapshot_inputs_built
+            >> dbt_snapshot
+            >> mark_dbt_snapshotted
+            >> dbt_build
+            >> mark_dbt_built
+            >> dbt_test
+            >> mark_tested
+        )
 
     end = EmptyOperator(task_id="end")
 
-    _ = (
+    (
         start
         >> start_batch
-        >> validate_source_contract
-        >> mark_source_validated
-        >> prepare_raw_files
-        >> generate_correction_feeds
-        >> mark_raw_prepared
-        >> load_raw_files_to_postgres
-        >> reconcile_raw_load
-        >> dbt_build_snapshot_inputs
-        >> mark_snapshot_inputs_built
-        >> dbt_snapshot
-        >> mark_dbt_snapshotted
-        >> dbt_build
-        >> mark_dbt_built
-        >> dbt_test
-        >> mark_tested
+        >> raw_preparation()
+        >> raw_load_quality()
+        >> dbt_transformations()
         >> end
     )
+
+
+olist_modern_data_stack_local()
