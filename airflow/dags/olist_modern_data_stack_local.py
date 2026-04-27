@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.sdk import Param, dag, get_current_context, task, task_group
+from airflow.sdk.exceptions import AirflowException
 
 DAG_ID = "olist_modern_data_stack_local"
 
@@ -52,12 +55,17 @@ def run_project_command(command: list[str]) -> None:
     subprocess.run(command, cwd=str(PROJECT_ROOT), check=True)
 
 
-def current_batch_identifiers() -> tuple[dict, str, str]:
+def current_batch_identifiers() -> tuple[Mapping[str, Any], str, str]:
     context = get_current_context()
-    params = context["params"]
+    params = context.get("params")
+    run_id = context.get("run_id")
+    if not isinstance(params, Mapping):
+        raise AirflowException("Airflow task context is missing params")
+    if run_id is None:
+        raise AirflowException("Airflow task context is missing run_id")
+
     batch_date = str(params["batch_date"])
-    run_id = local_run_id(str(context["run_id"]))
-    return params, batch_date, run_id
+    return params, batch_date, local_run_id(str(run_id))
 
 
 def batch_control_args(
