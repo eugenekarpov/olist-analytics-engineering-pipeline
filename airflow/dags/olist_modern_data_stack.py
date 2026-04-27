@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow.exceptions import AirflowException
@@ -100,7 +100,7 @@ acceptinvchars
 region '{aws_region}';
 """
 
-    started_at = datetime.now(UTC).replace(tzinfo=None)
+    started_at = context["logical_date"].replace(tzinfo=None)
 
     try:
         with connection.cursor() as cursor:
