@@ -174,6 +174,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dead-letter-max-rows", type=int, default=0)
     parser.add_argument("--dead-letter-max-rate", type=float, default=0)
     parser.add_argument("--dbt-threads", type=int, default=1)
+    parser.add_argument("--dag-registration-timeout-seconds", type=int, default=180)
+    parser.add_argument("--dag-registration-poll-seconds", type=int, default=5)
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     parser.add_argument("--poll-seconds", type=int, default=5)
     return parser.parse_args()
@@ -238,6 +240,34 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     return result
 
 
+def wait_for_dag_registration(args: argparse.Namespace) -> None:
+    deadline = time.monotonic() + args.dag_registration_timeout_seconds
+    last_output = ""
+
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["airflow", "dags", "list"],
+            cwd=PROJECT_ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        last_output = result.stdout
+        if result.returncode == 0 and args.dag_id in result.stdout:
+            print(f"DAG {args.dag_id} is registered in Airflow", flush=True)
+            return
+
+        print(f"Waiting for DAG {args.dag_id} to be registered", flush=True)
+        time.sleep(args.dag_registration_poll_seconds)
+
+    print(last_output, end="", flush=True)
+    raise TimeoutError(
+        "Timed out after "
+        f"{args.dag_registration_timeout_seconds}s waiting for DAG {args.dag_id}"
+    )
+
+
 def dag_conf(args: argparse.Namespace, *, full_refresh: bool) -> dict[str, Any]:
     return {
         "batch_date": args.batch_date,
@@ -294,6 +324,7 @@ def fetch_failed_tasks(dag_id: str, run_id: str) -> list[tuple[str, str]]:
 
 
 def trigger_dag(args: argparse.Namespace, *, run_id: str, full_refresh: bool) -> None:
+    wait_for_dag_registration(args)
     try:
         unpause = run_command(["airflow", "dags", "unpause", args.dag_id])
         print(unpause.stdout, end="", flush=True)
