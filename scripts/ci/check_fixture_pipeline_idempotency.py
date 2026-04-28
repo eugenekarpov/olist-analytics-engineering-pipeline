@@ -35,12 +35,6 @@ DEFAULT_PROFILE = (
 )
 DEFAULT_RAW_DIR = PROJECT_ROOT / "data" / "ci" / "raw" / "olist_small"
 DEFAULT_FIXTURE_BATCH_DATE = "2018-09-01"
-LOCAL_DAG_FILE = Path(
-    os.environ.get(
-        "OLIST_LOCAL_DAG_FILE",
-        "/opt/airflow/dags/olist_modern_data_stack_local.py",
-    )
-)
 POSTGRES_SQL_DIR = PROJECT_ROOT / "infra" / "postgres"
 RESET_SCHEMAS = (
     "raw",
@@ -68,6 +62,20 @@ class RelationFingerprint:
 class RawFileFingerprint:
     row_count: int
     checksum: str
+
+
+def airflow_dags_folder() -> Path:
+    configured_folder = os.environ.get("AIRFLOW__CORE__DAGS_FOLDER")
+    if configured_folder:
+        return Path(configured_folder)
+    return PROJECT_ROOT / "airflow" / "dags"
+
+
+def local_dag_file() -> Path:
+    configured_file = os.environ.get("OLIST_LOCAL_DAG_FILE")
+    if configured_file:
+        return Path(configured_file)
+    return airflow_dags_folder() / "olist_modern_data_stack_local.py"
 
 
 FINGERPRINT_COLUMNS = {
@@ -256,12 +264,16 @@ def run_streaming_command(command: list[str]) -> None:
 
 
 def print_airflow_diagnostics() -> None:
+    dags_folder = airflow_dags_folder()
     diagnostics = [
         ["airflow", "config", "get-value", "core", "dags_folder"],
         [
             "python",
             "-c",
-            "from pathlib import Path; print(sorted(str(p) for p in Path('/opt/airflow/dags').glob('*.py')))",
+            (
+                "from pathlib import Path; "
+                f"print(sorted(str(p) for p in Path({str(dags_folder)!r}).glob('*.py')))"
+            ),
         ],
         ["airflow", "dags", "list-import-errors"],
         ["airflow", "dags", "list"],
@@ -452,7 +464,7 @@ def run_dag_test(
             "--conf",
             conf,
             "--dagfile-path",
-            str(LOCAL_DAG_FILE),
+            str(local_dag_file()),
         ]
     )
 

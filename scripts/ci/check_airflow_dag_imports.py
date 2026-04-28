@@ -13,21 +13,23 @@ os.environ.setdefault("AIRFLOW__LOGGING__BASE_LOG_FOLDER", "/tmp/airflow/logs")
 from airflow.dag_processing.dagbag import DagBag
 
 PROJECT_ROOT = Path(os.environ.get("OLIST_PROJECT_ROOT", Path.cwd()))
-DAGS_DIR = Path(
-    os.environ.get(
-        "AIRFLOW__CORE__DAGS_FOLDER",
-        PROJECT_ROOT / "airflow" / "dags",
-    )
-)
+
+
+def airflow_dags_folder() -> Path:
+    configured_folder = os.environ.get("AIRFLOW__CORE__DAGS_FOLDER")
+    if configured_folder:
+        return Path(configured_folder)
+    return PROJECT_ROOT / "airflow" / "dags"
 
 
 def main() -> None:
-    dag_bag = DagBag(dag_folder=str(DAGS_DIR), include_examples=False)
+    dags_dir = airflow_dags_folder()
+    dag_bag = DagBag(dag_folder=str(dags_dir), include_examples=False)
     if dag_bag.import_errors:
         print(json.dumps(dag_bag.import_errors, indent=2, sort_keys=True))
         raise SystemExit(1)
 
-    print(f"Imported {len(dag_bag.dags)} DAGs from {DAGS_DIR}")
+    print(f"Imported {len(dag_bag.dags)} DAGs from {dags_dir}")
 
 
 if __name__ == "__main__":
