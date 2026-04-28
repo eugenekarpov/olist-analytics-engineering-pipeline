@@ -46,6 +46,9 @@ RESET_SCHEMAS = (
 )
 TERMINAL_DAG_STATES = {"success", "failed"}
 VOLATILE_RAW_COLUMNS = {"_loaded_at"}
+AIRFLOW_LOG_DIR = Path(
+    os.environ.get("AIRFLOW__LOGGING__BASE_LOG_FOLDER", "/opt/airflow/logs")
+)
 
 
 @dataclass(frozen=True)
@@ -359,6 +362,34 @@ def fetch_failed_tasks(dag_id: str, run_id: str) -> list[tuple[str, str]]:
     return [(str(task_id), str(state)) for task_id, state in rows]
 
 
+def print_log_tail(path: Path, line_count: int = 200) -> None:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        print(f"Could not read {path}: {exc}", flush=True)
+        return
+
+    print(f"--- {path} last {line_count} lines ---", flush=True)
+    for line in lines[-line_count:]:
+        print(line, flush=True)
+
+
+def print_failed_task_logs(dag_id: str, run_id: str, task_ids: Sequence[str]) -> None:
+    for task_id in task_ids:
+        log_dir = AIRFLOW_LOG_DIR / f"dag_id={dag_id}" / f"run_id={run_id}"
+        candidates = sorted((log_dir / f"task_id={task_id}").glob("*.log")) + sorted(
+            log_dir.glob(f"**/task_id={task_id}/**/*.log")
+        )
+        if not candidates:
+            print(
+                f"No local log files found for task {task_id} under {log_dir}",
+                flush=True,
+            )
+            continue
+        for path in candidates:
+            print_log_tail(path)
+
+
 def trigger_dag(args: argparse.Namespace, *, run_id: str, full_refresh: bool) -> None:
     wait_for_dag_registration(args)
     try:
@@ -396,6 +427,11 @@ def wait_for_dag_success(args: argparse.Namespace, *, run_id: str) -> None:
             return
         if state in TERMINAL_DAG_STATES:
             failed_tasks = fetch_failed_tasks(args.dag_id, run_id)
+            print_failed_task_logs(
+                args.dag_id,
+                run_id,
+                [task_id for task_id, _ in failed_tasks],
+            )
             formatted_tasks = json.dumps(failed_tasks, indent=2)
             raise AssertionError(
                 f"DAG run {run_id} finished with state={state}; "
