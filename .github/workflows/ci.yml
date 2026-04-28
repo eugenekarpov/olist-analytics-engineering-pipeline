@@ -9,7 +9,7 @@ on:
 
 jobs:
   static-analysis:
-    name: Code quality and type checks
+    name: Lint, type check, and dbt static validation
     runs-on: ubuntu-latest
 
     services:
@@ -56,8 +56,31 @@ jobs:
         run: cp profiles.yml.example profiles.yml
         working-directory: dbt/olist_analytics
 
-      - name: Run pre-commit hooks
-        run: uv run pre-commit run --all-files --show-diff-on-failure
+      - name: Run Ruff lint
+        run: uv run ruff check .
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check .
+
+      - name: Run Pyright
+        run: uv run pyright
+
+      - name: Parse dbt project
+        run: uv run dbt parse --no-partial-parse --show-all-deprecations
+        working-directory: dbt/olist_analytics
+
+      - name: Compile dbt project
+        run: uv run dbt compile --no-partial-parse
+        working-directory: dbt/olist_analytics
+
+      - name: Lint SQL with SQLFluff
+        run: >-
+          uv run sqlfluff lint
+          dbt/olist_analytics/models
+          dbt/olist_analytics/snapshots
+          dbt/olist_analytics/tests
+          dbt/olist_analytics/analyses
+          dbt/olist_analytics/macros
 
   python-unit:
     name: Python unit and fixture contract
@@ -89,42 +112,6 @@ jobs:
 
       - name: Run Python unit tests
         run: uv run python -m unittest discover -s tests -v
-
-  dbt-static:
-    name: dbt parse
-    runs-on: ubuntu-latest
-
-    env:
-      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/olist_analytics
-      DBT_TARGET: local_pg
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: olist_analytics
-      POSTGRES_USER: olist
-      POSTGRES_PASSWORD: olist
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
-        with:
-          enable-cache: true
-
-      - name: Install Python
-        run: uv python install
-
-      - name: Install dependencies
-        run: uv sync --locked --no-dev
-
-      - name: Prepare dbt profile
-        run: cp profiles.yml.example profiles.yml
-        working-directory: dbt/olist_analytics
-
-      - name: Parse dbt project
-        run: uv run dbt parse --no-partial-parse --show-all-deprecations
-        working-directory: dbt/olist_analytics
 
   airflow-imports:
     name: Docker Compose and Airflow DAG imports
