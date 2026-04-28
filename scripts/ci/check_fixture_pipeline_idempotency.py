@@ -35,7 +35,12 @@ DEFAULT_PROFILE = (
 )
 DEFAULT_RAW_DIR = PROJECT_ROOT / "data" / "ci" / "raw" / "olist_small"
 DEFAULT_FIXTURE_BATCH_DATE = "2018-09-01"
-LOCAL_DAG_FILE = PROJECT_ROOT / "airflow" / "dags" / "olist_modern_data_stack_local.py"
+LOCAL_DAG_FILE = Path(
+    os.environ.get(
+        "OLIST_LOCAL_DAG_FILE",
+        "/opt/airflow/dags/olist_modern_data_stack_local.py",
+    )
+)
 POSTGRES_SQL_DIR = PROJECT_ROOT / "infra" / "postgres"
 RESET_SCHEMAS = (
     "raw",
