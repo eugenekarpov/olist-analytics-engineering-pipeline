@@ -381,24 +381,8 @@ def olist_modern_data_stack():
 
     @task_group(group_id="dbt_transformations")
     def dbt_transformations():
-        dbt_build_snapshot_inputs = BashOperator(
-            task_id="dbt_build_snapshot_inputs",
-            cwd=str(DBT_PROJECT_DIR),
-            bash_command=(
-                "dbt build --select staging intermediate "
-                "--indirect-selection cautious --vars "
-                "'{batch_date: \"{{ params.batch_date }}\"}'"
-            ),
-        )
-
-        dbt_snapshot = BashOperator(
-            task_id="dbt_snapshot",
-            cwd=str(DBT_PROJECT_DIR),
-            bash_command="dbt snapshot --vars '{batch_date: \"{{ params.batch_date }}\"}'",
-        )
-
         dbt_build_command = (
-            "dbt build --exclude resource_type:snapshot --vars "
+            "dbt build --vars "
             "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
         )
 
@@ -415,16 +399,7 @@ def olist_modern_data_stack():
             ),
         )
 
-        dbt_test = BashOperator(
-            task_id="dbt_test",
-            cwd=str(DBT_PROJECT_DIR),
-            bash_command=(
-                "dbt test --vars "
-                "'{batch_date: \"{{ params.batch_date }}\", lookback_days: {{ params.lookback_days }}}'"
-            ),
-        )
-
-        _ = dbt_build_snapshot_inputs >> dbt_snapshot >> dbt_build >> dbt_test
+        _ = dbt_build
 
     end = EmptyOperator(task_id="end")
 
