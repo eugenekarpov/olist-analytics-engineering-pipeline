@@ -14,6 +14,7 @@ import sys
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ DEFAULT_PROFILE = (
 )
 DEFAULT_RAW_DIR = PROJECT_ROOT / "data" / "ci" / "raw" / "olist_small"
 DEFAULT_FIXTURE_BATCH_DATE = "2018-09-01"
+LOCAL_DAG_FILE = PROJECT_ROOT / "airflow" / "dags" / "olist_modern_data_stack_local.py"
 POSTGRES_SQL_DIR = PROJECT_ROOT / "infra" / "postgres"
 RESET_SCHEMAS = (
     "raw",
@@ -243,6 +245,11 @@ def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     return result
 
 
+def run_streaming_command(command: list[str]) -> None:
+    print(f"+ {' '.join(command)}", flush=True)
+    subprocess.run(command, cwd=PROJECT_ROOT, check=True)
+
+
 def print_airflow_diagnostics() -> None:
     diagnostics = [
         ["airflow", "config", "get-value", "core", "dags_folder"],
@@ -413,6 +420,36 @@ def trigger_dag(args: argparse.Namespace, *, run_id: str, full_refresh: bool) ->
         ]
     )
     print(result.stdout, end="", flush=True)
+
+
+def dag_test_logical_date(offset_seconds: int) -> str:
+    logical_date = datetime.now(UTC).replace(microsecond=0) + timedelta(
+        seconds=offset_seconds
+    )
+    return logical_date.isoformat()
+
+
+def run_dag_test(
+    args: argparse.Namespace,
+    *,
+    full_refresh: bool,
+    offset_seconds: int,
+) -> None:
+    wait_for_dag_registration(args)
+    conf = json.dumps(dag_conf(args, full_refresh=full_refresh), sort_keys=True)
+    run_streaming_command(
+        [
+            "airflow",
+            "dags",
+            "test",
+            args.dag_id,
+            dag_test_logical_date(offset_seconds),
+            "--conf",
+            conf,
+            "--dagfile-path",
+            str(LOCAL_DAG_FILE),
+        ]
+    )
 
 
 def wait_for_dag_success(args: argparse.Namespace, *, run_id: str) -> None:
@@ -699,9 +736,8 @@ def main() -> None:
     clean_raw_dir(raw_dir)
     reset_warehouse(env)
 
-    print("Triggering initial fixture DAG run", flush=True)
-    trigger_dag(args, run_id=args.initial_run_id, full_refresh=True)
-    wait_for_dag_success(args, run_id=args.initial_run_id)
+    print("Running initial fixture DAG test", flush=True)
+    run_dag_test(args, full_refresh=True, offset_seconds=0)
 
     initial_raw_fingerprints = capture_raw_file_fingerprints(raw_dir)
     print_raw_fingerprints("Initial", initial_raw_fingerprints)
@@ -710,9 +746,8 @@ def main() -> None:
         initial_fingerprints = capture_fingerprints(connection)
     print_fingerprints("Initial", initial_fingerprints)
 
-    print("Triggering replay fixture DAG run", flush=True)
-    trigger_dag(args, run_id=args.replay_run_id, full_refresh=False)
-    wait_for_dag_success(args, run_id=args.replay_run_id)
+    print("Running replay fixture DAG test", flush=True)
+    run_dag_test(args, full_refresh=False, offset_seconds=1)
 
     replay_raw_fingerprints = capture_raw_file_fingerprints(raw_dir)
     print_raw_fingerprints("Replay", replay_raw_fingerprints)
