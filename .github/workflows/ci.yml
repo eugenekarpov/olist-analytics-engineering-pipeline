@@ -140,6 +140,9 @@ jobs:
   fixture-integration:
     name: Small fixture integration and replay
     runs-on: ubuntu-latest
+    env:
+      OLIST_AIRFLOW_RETRIES: "0"
+      OLIST_AIRFLOW_RETRY_DELAY_SECONDS: "1"
 
     steps:
       - name: Check out repository
@@ -175,6 +178,12 @@ jobs:
         run: >-
           docker compose exec -T airflow
           python scripts/ci/check_fixture_pipeline_idempotency.py
+          --timeout-seconds 600
+          --poll-seconds 2
+
+      - name: Dump fixture stack logs
+        if: failure()
+        run: docker compose logs --no-color --tail=500 airflow postgres airflow-postgres
 
       - name: Clean up Compose resources
         if: always()

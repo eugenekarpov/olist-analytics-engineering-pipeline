@@ -44,6 +44,10 @@ DEFAULT_SOURCE_ARCHIVE = "olist.zip"
 DEFAULT_SOURCE_PROFILE = "docs/source_profile.json"
 DEFAULT_LOCAL_RAW_DIR = "data/raw/olist"
 POSTGRES_SQL_DIR = "infra/postgres"
+DEFAULT_RETRIES = int(os.environ.get("OLIST_AIRFLOW_RETRIES", "2"))
+DEFAULT_RETRY_DELAY_SECONDS = int(
+    os.environ.get("OLIST_AIRFLOW_RETRY_DELAY_SECONDS", "300")
+)
 # Runtime default for manual/demo runs. It is after all generated correction
 # feed effective dates, so one batch sees the complete synthetic SCD2 scenario.
 DEFAULT_DEMO_BATCH_DATE = "2018-09-01"
@@ -135,8 +139,8 @@ def mark_batch_failed(context: dict) -> None:
 
 default_args = {
     "owner": "data-engineering",
-    "retries": 2,
-    "retry_delay": timedelta(minutes=5),
+    "retries": DEFAULT_RETRIES,
+    "retry_delay": timedelta(seconds=DEFAULT_RETRY_DELAY_SECONDS),
     "on_failure_callback": mark_batch_failed,
 }
 

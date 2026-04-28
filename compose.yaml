@@ -69,6 +69,8 @@ services:
       AIRFLOW__API__SECRET_KEY: local_dev_only_secret_key
       OLIST_PROJECT_ROOT: /opt/airflow/project
       OLIST_PYTHON_BIN: python
+      OLIST_AIRFLOW_RETRIES: "${OLIST_AIRFLOW_RETRIES:-2}"
+      OLIST_AIRFLOW_RETRY_DELAY_SECONDS: "${OLIST_AIRFLOW_RETRY_DELAY_SECONDS:-300}"
       DBT_PROFILES_DIR: /opt/airflow/project/dbt/olist_analytics
       DBT_TARGET: local_pg
       POSTGRES_HOST: postgres
