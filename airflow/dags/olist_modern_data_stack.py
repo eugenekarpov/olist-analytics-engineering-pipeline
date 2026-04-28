@@ -37,7 +37,10 @@ def resolve_project_root() -> Path:
 PROJECT_ROOT = resolve_project_root()
 PYTHON_BIN = os.environ.get("OLIST_PYTHON_BIN", "python")
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt" / "olist_analytics"
-SOURCE_PROFILE_PATH = PROJECT_ROOT / "docs" / "source_profile.json"
+DEFAULT_SOURCE_ARCHIVE = "olist.zip"
+DEFAULT_SOURCE_PROFILE = "docs/source_profile.json"
+DEFAULT_PREPARED_DIR_TEMPLATE = "data/prepared/{ds_nodash}"
+DEFAULT_S3_PREFIX = "olist"
 # Runtime default for manual/demo runs. It is after all generated correction
 # feed effective dates, so one batch sees the complete synthetic SCD2 scenario.
 DEFAULT_DEMO_BATCH_DATE = "2018-09-01"
@@ -50,8 +53,17 @@ def required_env(name: str) -> str:
     return value
 
 
-def load_entities() -> list[str]:
-    profile = json.loads(SOURCE_PROFILE_PATH.read_text(encoding="utf-8"))
+def param_or_env(params: Mapping[str, Any], param_name: str, env_name: str) -> str:
+    value = str(params.get(param_name) or os.environ.get(env_name, ""))
+    if not value:
+        raise AirflowException(
+            f"Missing required DAG param {param_name!r} or environment variable {env_name}"
+        )
+    return value
+
+
+def load_entities(profile_path: str) -> list[str]:
+    profile = json.loads((PROJECT_ROOT / profile_path).read_text(encoding="utf-8"))
     correction_entities = [
         "customer_profile_changes",
         "product_attribute_changes",
@@ -87,10 +99,13 @@ def copy_raw_files_to_redshift_callable(**context) -> None:
 
     batch_date = context["params"]["batch_date"]
     run_id = context["run_id"]
+    params = context["params"]
 
-    bucket = required_env("OLIST_S3_BUCKET")
-    prefix = os.environ.get("OLIST_S3_PREFIX", "olist").strip("/")
-    aws_region = os.environ.get("AWS_REGION", "us-east-1")
+    bucket = param_or_env(params, "s3_bucket", "OLIST_S3_BUCKET")
+    prefix = str(params.get("s3_prefix") or DEFAULT_S3_PREFIX).strip("/")
+    aws_region = str(
+        params.get("aws_region") or os.environ.get("AWS_REGION", "us-east-1")
+    )
     iam_role_arn = required_env("REDSHIFT_COPY_IAM_ROLE_ARN")
 
     connection = psycopg2.connect(
@@ -121,7 +136,7 @@ region '{aws_region}';
 
     try:
         with connection.cursor() as cursor:
-            for entity_name in load_entities():
+            for entity_name in load_entities(str(params["source_profile"])):
                 source_uri = (
                     f"s3://{bucket}/{prefix}/raw/{entity_name}/"
                     f"batch_date={batch_date}/run_id={run_id}/"
@@ -214,6 +229,50 @@ dag_params = {
         type="boolean",
         description="Run dbt build with --full-refresh.",
     ),
+    "source_archive": Param(
+        DEFAULT_SOURCE_ARCHIVE,
+        type="string",
+        description="Path to the source Olist zip archive.",
+    ),
+    "source_profile": Param(
+        DEFAULT_SOURCE_PROFILE,
+        type="string",
+        description="Path to the source profile JSON file.",
+    ),
+    "prepared_dir_template": Param(
+        DEFAULT_PREPARED_DIR_TEMPLATE,
+        type="string",
+        description=("Local prepared-file directory template. Supports {ds_nodash}."),
+    ),
+    "s3_bucket": Param(
+        os.environ.get("OLIST_S3_BUCKET", ""),
+        type="string",
+        description="S3 bucket for prepared raw files. Falls back to OLIST_S3_BUCKET.",
+    ),
+    "s3_prefix": Param(
+        os.environ.get("OLIST_S3_PREFIX", DEFAULT_S3_PREFIX),
+        type="string",
+        description="S3 prefix for prepared raw files.",
+    ),
+    "aws_region": Param(
+        os.environ.get("AWS_REGION", "us-east-1"),
+        type="string",
+        description="AWS region used by Redshift COPY.",
+    ),
+    "dead_letter_max_rows": Param(
+        10,
+        type="integer",
+        minimum=0,
+        maximum=100000,
+        description="Maximum accepted dead-letter row count.",
+    ),
+    "dead_letter_max_rate": Param(
+        0.001,
+        type="number",
+        minimum=0,
+        maximum=1,
+        description="Maximum accepted dead-letter rate.",
+    ),
 }
 
 
@@ -235,38 +294,46 @@ def olist_modern_data_stack():
     def raw_ingestion():
         @task
         def validate_source_contract() -> None:
+            params, _, _ = current_s3_batch_context()
             run_project_command(
                 [
                     PYTHON_BIN,
                     "scripts/utilities/validate_source_contract.py",
                     "--archive",
-                    "olist.zip",
+                    str(params["source_archive"]),
                     "--profile",
-                    "docs/source_profile.json",
+                    str(params["source_profile"]),
                 ]
             )
 
         @task
         def upload_raw_files_to_s3() -> None:
             params, ds_nodash, run_id = current_s3_batch_context()
+            output_dir = str(params["prepared_dir_template"]).format(
+                ds_nodash=ds_nodash
+            )
             run_project_command(
                 [
                     PYTHON_BIN,
                     "scripts/ingestion/ingest_olist_to_s3.py",
                     "--archive",
-                    "olist.zip",
+                    str(params["source_archive"]),
                     "--profile",
-                    "docs/source_profile.json",
+                    str(params["source_profile"]),
                     "--output-dir",
-                    f"data/prepared/{ds_nodash}",
+                    output_dir,
                     "--batch-date",
                     str(params["batch_date"]),
                     "--run-id",
                     run_id,
                     "--s3-bucket",
-                    required_env("OLIST_S3_BUCKET"),
+                    param_or_env(params, "s3_bucket", "OLIST_S3_BUCKET"),
                     "--s3-prefix",
-                    os.environ.get("OLIST_S3_PREFIX", "olist"),
+                    str(params["s3_prefix"]),
+                    "--dead-letter-max-rows",
+                    str(params["dead_letter_max_rows"]),
+                    "--dead-letter-max-rate",
+                    str(params["dead_letter_max_rate"]),
                     "--upload",
                 ]
             )
@@ -274,22 +341,29 @@ def olist_modern_data_stack():
         @task
         def generate_and_upload_correction_feeds() -> None:
             params, ds_nodash, run_id = current_s3_batch_context()
+            output_dir = str(params["prepared_dir_template"]).format(
+                ds_nodash=ds_nodash
+            )
             run_project_command(
                 [
                     PYTHON_BIN,
                     "scripts/ingestion/generate_correction_feeds.py",
                     "--archive",
-                    "olist.zip",
+                    str(params["source_archive"]),
                     "--output-dir",
-                    f"data/prepared/{ds_nodash}",
+                    output_dir,
                     "--batch-date",
                     str(params["batch_date"]),
                     "--run-id",
                     run_id,
                     "--s3-bucket",
-                    required_env("OLIST_S3_BUCKET"),
+                    param_or_env(params, "s3_bucket", "OLIST_S3_BUCKET"),
                     "--s3-prefix",
-                    os.environ.get("OLIST_S3_PREFIX", "olist"),
+                    str(params["s3_prefix"]),
+                    "--dead-letter-max-rows",
+                    str(params["dead_letter_max_rows"]),
+                    "--dead-letter-max-rate",
+                    str(params["dead_letter_max_rate"]),
                     "--upload",
                 ]
             )

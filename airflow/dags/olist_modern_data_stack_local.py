@@ -40,7 +40,9 @@ def resolve_project_root() -> Path:
 PROJECT_ROOT = resolve_project_root()
 PYTHON_BIN = os.environ.get("OLIST_PYTHON_BIN", "python")
 DBT_PROJECT_DIR = PROJECT_ROOT / "dbt" / "olist_analytics"
-LOCAL_RAW_DIR = "data/raw/olist"
+DEFAULT_SOURCE_ARCHIVE = "olist.zip"
+DEFAULT_SOURCE_PROFILE = "docs/source_profile.json"
+DEFAULT_LOCAL_RAW_DIR = "data/raw/olist"
 POSTGRES_SQL_DIR = "infra/postgres"
 # Runtime default for manual/demo runs. It is after all generated correction
 # feed effective dates, so one batch sees the complete synthetic SCD2 scenario.
@@ -72,6 +74,7 @@ def batch_control_args(
     command: str,
     batch_date: str,
     run_id: str,
+    raw_dir: str,
     status: str | None = None,
 ) -> list[str]:
     args = [
@@ -87,7 +90,7 @@ def batch_control_args(
         "--dag-id",
         DAG_ID,
         "--raw-dir",
-        LOCAL_RAW_DIR,
+        raw_dir,
     ]
     if command == "start":
         args.extend(["--bootstrap-sql-dir", POSTGRES_SQL_DIR])
@@ -102,6 +105,7 @@ def mark_batch_failed(context: dict) -> None:
     task_id = getattr(task_instance, "task_id", "unknown_task")
     exception = context.get("exception")
     batch_date = str(params.get("batch_date", DEFAULT_DEMO_BATCH_DATE))
+    raw_dir = str(params.get("raw_dir", DEFAULT_LOCAL_RAW_DIR))
     error_message = f"{task_id}: {exception}"[:65535]
 
     subprocess.run(
@@ -118,7 +122,7 @@ def mark_batch_failed(context: dict) -> None:
             "--dag-id",
             DAG_ID,
             "--raw-dir",
-            LOCAL_RAW_DIR,
+            raw_dir,
             "--bootstrap-sql-dir",
             POSTGRES_SQL_DIR,
             "--error-message",
@@ -156,6 +160,21 @@ dag_params = {
         type="boolean",
         description="Run dbt build with --full-refresh.",
     ),
+    "source_archive": Param(
+        DEFAULT_SOURCE_ARCHIVE,
+        type="string",
+        description="Path to the source Olist zip archive.",
+    ),
+    "source_profile": Param(
+        DEFAULT_SOURCE_PROFILE,
+        type="string",
+        description="Path to the source profile JSON file.",
+    ),
+    "raw_dir": Param(
+        DEFAULT_LOCAL_RAW_DIR,
+        type="string",
+        description="Local raw-zone directory used by ingestion and raw load tasks.",
+    ),
     "dead_letter_max_rows": Param(
         10,
         type="integer",
@@ -189,17 +208,20 @@ def olist_modern_data_stack_local():
 
     @task
     def start_batch() -> None:
-        _, batch_date, run_id = current_batch_identifiers()
-        run_project_command(batch_control_args("start", batch_date, run_id))
+        params, batch_date, run_id = current_batch_identifiers()
+        run_project_command(
+            batch_control_args("start", batch_date, run_id, str(params["raw_dir"]))
+        )
 
     @task
     def mark_batch_status(status: str) -> None:
-        _, batch_date, run_id = current_batch_identifiers()
+        params, batch_date, run_id = current_batch_identifiers()
         run_project_command(
             batch_control_args(
                 "mark",
                 batch_date,
                 run_id,
+                str(params["raw_dir"]),
                 status=status,
             )
         )
@@ -208,14 +230,15 @@ def olist_modern_data_stack_local():
     def raw_preparation():
         @task
         def validate_source_contract() -> None:
+            params, _, _ = current_batch_identifiers()
             run_project_command(
                 [
                     PYTHON_BIN,
                     "scripts/utilities/validate_source_contract.py",
                     "--archive",
-                    "olist.zip",
+                    str(params["source_archive"]),
                     "--profile",
-                    "docs/source_profile.json",
+                    str(params["source_profile"]),
                 ]
             )
 
@@ -227,11 +250,11 @@ def olist_modern_data_stack_local():
                     PYTHON_BIN,
                     "scripts/ingestion/prepare_olist_raw_files.py",
                     "--archive",
-                    "olist.zip",
+                    str(params["source_archive"]),
                     "--profile",
-                    "docs/source_profile.json",
+                    str(params["source_profile"]),
                     "--output-dir",
-                    LOCAL_RAW_DIR,
+                    str(params["raw_dir"]),
                     "--batch-date",
                     batch_date,
                     "--batch-id",
@@ -253,9 +276,9 @@ def olist_modern_data_stack_local():
                     PYTHON_BIN,
                     "scripts/ingestion/generate_correction_feeds.py",
                     "--archive",
-                    "olist.zip",
+                    str(params["source_archive"]),
                     "--output-dir",
-                    LOCAL_RAW_DIR,
+                    str(params["raw_dir"]),
                     "--batch-date",
                     batch_date,
                     "--batch-id",
@@ -286,15 +309,15 @@ def olist_modern_data_stack_local():
     def raw_load_quality():
         @task
         def load_raw_files_to_postgres() -> None:
-            _, batch_date, run_id = current_batch_identifiers()
+            params, batch_date, run_id = current_batch_identifiers()
             run_project_command(
                 [
                     PYTHON_BIN,
                     "scripts/loading/load_raw_to_postgres.py",
                     "--raw-dir",
-                    LOCAL_RAW_DIR,
+                    str(params["raw_dir"]),
                     "--profile",
-                    "docs/source_profile.json",
+                    str(params["source_profile"]),
                     "--bootstrap-sql-dir",
                     POSTGRES_SQL_DIR,
                     "--batch-date",
@@ -310,15 +333,15 @@ def olist_modern_data_stack_local():
 
         @task
         def reconcile_raw_load() -> None:
-            _, batch_date, run_id = current_batch_identifiers()
+            params, batch_date, run_id = current_batch_identifiers()
             run_project_command(
                 [
                     PYTHON_BIN,
                     "scripts/quality/reconcile_batch.py",
                     "--raw-dir",
-                    LOCAL_RAW_DIR,
+                    str(params["raw_dir"]),
                     "--profile",
-                    "docs/source_profile.json",
+                    str(params["source_profile"]),
                     "--bootstrap-sql-dir",
                     POSTGRES_SQL_DIR,
                     "--batch-date",
