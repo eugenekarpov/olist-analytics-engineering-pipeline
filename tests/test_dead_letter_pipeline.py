@@ -285,7 +285,7 @@ class BatchControlTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "Cannot move batch from terminal status"
         ):
-            validate_transition("TESTED", "RAW_LOADED")
+            validate_transition("DBT_BUILT", "RAW_LOADED")
 
     def test_manifest_uris_are_optional_and_detect_existing_manifests(self) -> None:
         with temporary_workspace_directory() as tmpdir:

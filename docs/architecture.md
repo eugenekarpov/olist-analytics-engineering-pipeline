@@ -67,10 +67,7 @@ prepare_raw_files
 generate_correction_feeds
 load_raw_files_to_postgres
 reconcile_raw_load
-dbt_build_snapshot_inputs
-dbt_snapshot
 dbt_build
-dbt_test
 ```
 
 Airflow handles orchestration, retries, parameters, and failure callbacks. The
@@ -117,10 +114,7 @@ SOURCE_VALIDATED
 RAW_PREPARED
 RAW_LOADED
 RAW_RECONCILED
-DBT_SNAPSHOT_INPUTS_BUILT
-DBT_SNAPSHOTTED
 DBT_BUILT
-TESTED
 ```
 
 `FAILED` is allowed from any state. The helper script prevents accidental
